@@ -1,6 +1,15 @@
-from .core import Device, Field, Grid, Region
+from .core import (
+    BoundaryCondition,
+    BoundaryConditionType,
+    Device,
+    Field,
+    Grid,
+    Region,
+)
 
 __all__ = [
+    "BoundaryCondition",
+    "BoundaryConditionType",
     "Device",
     "Field",
     "Grid",
