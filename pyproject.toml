@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "deviceforge"
+version = "0.1.0"
+description = "An open-source framework for semiconductor device simulation, HPC, machine learning and optimisation."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "John McKay" }
+]
+
+dependencies = [
+    "numpy>=1.26",
+    "matplotlib>=3.8"
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
