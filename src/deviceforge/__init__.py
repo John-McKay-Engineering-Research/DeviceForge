@@ -5,6 +5,7 @@ from .core import (
     Field,
     Grid,
     Region,
+    Simulation,
 )
 
 __all__ = [
@@ -14,6 +15,7 @@ __all__ = [
     "Field",
     "Grid",
     "Region",
+    "Simulation",
 ]
 
 __version__ = "0.1.0"
