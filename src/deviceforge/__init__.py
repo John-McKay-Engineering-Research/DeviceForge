@@ -6,6 +6,7 @@ from .core import (
     Grid,
     Region,
     Simulation,
+    SimulationResult,
 )
 
 __all__ = [
@@ -16,6 +17,7 @@ __all__ = [
     "Grid",
     "Region",
     "Simulation",
+    "SimulationResult",
 ]
 
 __version__ = "0.1.0"
