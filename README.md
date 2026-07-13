@@ -16,11 +16,11 @@ DeviceForge currently includes a validated two-dimensional Jacobi solver for the
 
 ### Electrostatic Potential
 
-![Two-dimensional electrostatic potential](figures/examples/laplace_potential.png)
+![Two-dimensional electrostatic potential](examples/figures/examples/laplace_potential.png)
 
 ### Solver Convergence
 
-![Jacobi solver convergence](figures/examples/jacobi_convergence.png)
+![Jacobi solver convergence](examples/figures/examples/jacobi_convergence.png)
 
 Run the example with:
 
