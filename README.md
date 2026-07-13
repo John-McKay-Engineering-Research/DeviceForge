@@ -10,6 +10,24 @@ The long-term aim is to create a modular platform for investigating how numerica
 
 ---
 
+## Current Demonstration
+
+DeviceForge currently includes a validated two-dimensional Jacobi solver for the Laplace equation on structured Cartesian grids.
+
+### Electrostatic Potential
+
+![Two-dimensional electrostatic potential](figures/examples/laplace_potential.png)
+
+### Solver Convergence
+
+![Jacobi solver convergence](figures/examples/jacobi_convergence.png)
+
+Run the example with:
+
+```powershell
+python examples/laplace_rectangle.py
+```
+
 ## Project Status
 
 DeviceForge is currently under active development.
