@@ -5,9 +5,11 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
 from deviceforge import Field, Grid, SimulationResult
+from deviceforge.postprocessing import compute_electric_field
 from deviceforge.visualisation import (
     plot_convergence,
     plot_scalar_field,
+    plot_vector_field,
     save_figure,
 )
 
@@ -136,3 +138,35 @@ def test_convergence_plot_rejects_zero_iterations(
 
     with pytest.raises(ValueError, match="zero-iteration"):
         plot_convergence(result)
+
+
+def test_plot_vector_field(
+    potential_field: Field,
+) -> None:
+    electric_field = compute_electric_field(
+        potential_field
+    )
+
+    figure, axes = plot_vector_field(
+        electric_field,
+        stride=2,
+    )
+
+    assert isinstance(figure, Figure)
+    assert isinstance(axes, Axes)
+    assert axes.get_xlabel() == "x [nm]"
+    assert axes.get_ylabel() == "y [nm]"
+
+
+def test_invalid_vector_stride_raises_value_error(
+    potential_field: Field,
+) -> None:
+    electric_field = compute_electric_field(
+        potential_field
+    )
+
+    with pytest.raises(ValueError, match="stride"):
+        plot_vector_field(
+            electric_field,
+            stride=0,
+        )

@@ -22,6 +22,14 @@ DeviceForge currently includes a validated two-dimensional Jacobi solver for the
 
 ![Jacobi solver convergence](examples/figures/examples/jacobi_convergence.png)
 
+### Electric-Field Magnitude
+
+![Electric-field magnitude](examples/figures/examples/electric_field_magnitude.png)
+
+### Electric-Field Direction
+
+![Electric-field vectors](examples/figures/examples/electric_field_vectors.png)
+
 Run the example with:
 
 ```powershell

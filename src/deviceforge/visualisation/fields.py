@@ -9,6 +9,7 @@ from matplotlib.figure import Figure
 
 from deviceforge import Field, SimulationResult
 
+from deviceforge.postprocessing import ElectricField
 
 def plot_scalar_field(
     field: Field,
@@ -72,6 +73,61 @@ def plot_scalar_field(
 
     return figure, axes
 
+def plot_vector_field(
+    electric_field: ElectricField,
+    *,
+    title: str = "Electric field",
+    stride: int = 5,
+) -> tuple[Figure, Axes]:
+    """
+    Plot a two-dimensional electric field using vector arrows.
+
+    Parameters
+    ----------
+    electric_field:
+        Electric-field components to display.
+
+    title:
+        Figure title.
+
+    stride:
+        Number of grid points skipped between displayed arrows.
+
+    Returns
+    -------
+    tuple
+        Matplotlib figure and axes objects.
+    """
+
+    if stride <= 0:
+        raise ValueError("Vector-plot stride must be positive.")
+
+    x_coordinates, y_coordinates = (
+        electric_field.grid.mesh()
+    )
+
+    sample = (
+        slice(None, None, stride),
+        slice(None, None, stride),
+    )
+
+    figure, axes = plt.subplots()
+
+    axes.quiver(
+        x_coordinates[sample].T * 1.0e9,
+        y_coordinates[sample].T * 1.0e9,
+        electric_field.x_component.values[sample].T,
+        electric_field.y_component.values[sample].T,
+    )
+
+    axes.set_xlabel("x [nm]")
+    axes.set_ylabel("y [nm]")
+    axes.set_title(title)
+    axes.set_aspect("equal")
+
+    figure.tight_layout()
+
+    return figure, axes
 
 def plot_convergence(
     result: SimulationResult,

@@ -18,9 +18,11 @@ from deviceforge.solvers import (
 from deviceforge.visualisation import (
     plot_convergence,
     plot_scalar_field,
+    plot_vector_field,
     save_figure,
 )
 
+from deviceforge.postprocessing import compute_electric_field
 
 def build_simulation() -> Simulation:
     """Create a rectangular two-dimensional Laplace problem."""
@@ -128,6 +130,10 @@ def main() -> None:
     )
 
     result = solver.solve(simulation)
+    electric_field = compute_electric_field(
+        result.potential
+    )
+
 
     print_summary(result)
 
@@ -140,6 +146,20 @@ def main() -> None:
 
     convergence_figure, _ = plot_convergence(result)
 
+    # new lots
+    field_magnitude_figure, _ = plot_scalar_field(
+        electric_field.magnitude,
+        title="Electric-field magnitude",
+        colourbar_label="Electric-field magnitude [V/m]",
+        contour_levels=25,
+    )
+
+    field_vector_figure, _ = plot_vector_field(
+        electric_field,
+        title="Electric-field vectors",
+        stride=5,
+    )
+
     save_figure(
         potential_figure,
         "figures/examples/laplace_potential.png",
@@ -149,6 +169,18 @@ def main() -> None:
         convergence_figure,
         "figures/examples/jacobi_convergence.png",
     )
+
+    # new figures
+    save_figure(
+        field_magnitude_figure,
+        "figures/examples/electric_field_magnitude.png",
+    )
+
+    save_figure(
+        field_vector_figure,
+        "figures/examples/electric_field_vectors.png",
+    )
+
 
     plt.show()
 
