@@ -8,6 +8,8 @@ The initial release will focus on two-dimensional electrostatic device modelling
 
 The long-term aim is to create a modular platform for investigating how numerical simulation, high-performance computing and machine learning can be combined to accelerate semiconductor device design workflows.
 
+![DeviceForge](DeviceForge_Logo.png)
+
 ---
 
 ## Current Demonstration
