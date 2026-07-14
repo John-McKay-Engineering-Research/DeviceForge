@@ -35,6 +35,32 @@ Run the example with:
 ```powershell
 python examples/laplace_rectangle.py
 ```
+## Iterative Solver Comparison
+
+DeviceForge includes reproducible benchmarks comparing Jacobi, Gauss-Seidel
+and Successive Over-Relaxation methods.
+
+### Convergence
+
+![Iterative solver convergence comparison](benchmarks/figures/benchmarks/solver_convergence_comparison.png)
+
+### Runtime
+
+![Iterative solver runtime comparison](benchmarks/figures/benchmarks/solver_runtime_comparison.png)
+
+### Iteration Count
+
+![Iterative solver iteration comparison](benchmarks/figures/benchmarks/solver_iteration_comparison.png)
+
+### Analytical Error
+
+![Iterative solver analytical error](benchmarks/figures/benchmarks/solver_error_comparison.png)
+
+Run the benchmark with:
+
+```powershell
+python benchmarks/compare_iterative_solvers.py
+```
 
 ## Project Status
 

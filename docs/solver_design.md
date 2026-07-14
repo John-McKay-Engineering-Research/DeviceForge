@@ -124,7 +124,59 @@ This prevents either configuration from silently weakening another component's r
 
 ---
 
-## 5. Jacobi Solver Workflow
+# 5. Implemented Solvers
+
+## Jacobi
+
+Characteristics
+
+- Explicit iteration
+- Fully vectorisable
+- Excellent reference implementation
+- Simple mathematics
+- Slower convergence
+
+Applications
+
+- Validation
+- GPU implementations
+- Teaching
+- Baseline benchmarking
+
+---
+
+## Gauss-Seidel
+
+Characteristics
+
+- In-place updates
+- Uses newly computed values immediately
+- Lower memory requirements
+- Faster convergence than Jacobi in theory
+- More difficult to parallelise
+
+Applications
+
+- Classical PDE solvers
+- Reference implementation for SOR
+
+---
+
+## Successive Over-Relaxation (SOR)
+
+Characteristics
+
+- Extension of Gauss-Seidel
+- Relaxation factor ω
+- Can dramatically reduce iteration count
+- Sensitive to ω
+
+Applications
+
+- Faster stationary iterative solver
+- Baseline before multigrid
+
+## 6. Solver Workflows
 
 The initial Jacobi solver follows this process:
 
@@ -152,9 +204,155 @@ Check tolerance
 Return SimulationResult
 ```
 
+# 7. Iterative Solver Benchmarking
+
+## Purpose
+
+DeviceForge includes a reproducible benchmarking framework for evaluating iterative numerical solvers against a common reference problem.
+
+The objective of these benchmarks is to compare both the numerical behaviour and computational performance of different solution algorithms while using an identical physical model and convergence criteria.
+
+The current benchmark problem solves the two-dimensional Laplace equation on a rectangular silicon domain with fixed-potential (Dirichlet) boundaries on the left and right edges and homogeneous Neumann boundaries on the top and bottom edges.
+
 ---
 
-## 6. Current Limitations
+## Implemented Solvers
+
+The current benchmark compares:
+
+- Jacobi Iteration
+- Gauss-Seidel Iteration
+- Successive Over-Relaxation (SOR)
+
+Multiple SOR relaxation factors can be evaluated within the same benchmark.
+
+---
+
+## Benchmark Metrics
+
+Each benchmark records:
+
+- Convergence status
+- Total iteration count
+- Solver runtime
+- Final recorded solution-change residual
+- Maximum absolute error relative to the analytical solution
+
+These metrics provide a balanced comparison between numerical accuracy and computational efficiency.
+
+---
+
+## Analytical Validation
+
+The benchmark uses a problem with a known analytical solution:
+
+\[
+\phi(x)=\frac{x}{L}
+\]
+
+where:
+
+- Left boundary = 0 V
+- Right boundary = 1 V
+- Top boundary = zero normal gradient
+- Bottom boundary = zero normal gradient
+
+The analytical solution increases linearly across the computational domain.
+
+Each solver is compared against this analytical solution by computing the maximum absolute error:
+
+\[
+E_{\max}
+=
+\max
+\left|
+\phi_{\mathrm{numerical}}
+-
+\phi_{\mathrm{analytical}}
+\right|
+\]
+
+This provides a quantitative measure of numerical accuracy independent of convergence rate.
+
+---
+
+## Benchmark Outputs
+
+The benchmark automatically generates:
+
+- Residual history comparison
+- Runtime comparison
+- Iteration-count comparison
+- Analytical-error comparison
+
+These figures are written to:
+
+```text
+figures/benchmarks/
+```
+
+Example output:
+
+```text
+solver_convergence_comparison.png
+solver_runtime_comparison.png
+solver_iteration_comparison.png
+solver_error_comparison.png
+```
+
+---
+
+## Interpretation of Results
+
+Benchmark results should be interpreted carefully.
+
+A solver requiring fewer iterations does not necessarily execute faster.
+
+Likewise, a faster runtime does not necessarily imply superior numerical performance.
+
+Several factors contribute to overall solver performance:
+
+- Numerical convergence rate
+- Cost per iteration
+- Memory-access patterns
+- Vectorisation
+- Cache efficiency
+- Parallelisation capability
+- Hardware implementation
+
+For example, the current Jacobi implementation performs vectorised NumPy operations, while the initial Gauss-Seidel and SOR implementations use explicit Python loops.
+
+Consequently, Jacobi may execute faster despite requiring more numerical iterations.
+
+This distinction highlights the important difference between:
+
+- algorithmic efficiency
+- implementation efficiency
+- hardware efficiency
+
+---
+
+## Future Benchmark Extensions
+
+The benchmarking framework is designed to grow alongside DeviceForge.
+
+Planned comparisons include:
+
+- Different computational grid sizes
+- Non-uniform meshes
+- Three-dimensional simulations
+- Sparse matrix implementations
+- GPU acceleration
+- OpenMP implementations
+- Distributed-memory execution (MPI)
+- C++ numerical backends
+- Surrogate-assisted numerical solvers
+
+The benchmarking framework will provide quantitative evidence of the performance gains achieved by each successive numerical implementation.
+
+---
+
+## 8. Current Limitations
 
 The initial Jacobi solver supports:
 
@@ -179,7 +377,7 @@ It does not yet support:
 
 ---
 
-## 7. Performance Considerations
+## 9. Performance Considerations
 
 Jacobi requires a complete copy of the previous potential field for every iteration.
 
@@ -199,7 +397,7 @@ Despite its slow convergence, Jacobi is valuable as:
 
 ---
 
-## 8. Future Solver Comparison
+## 10. Future Solver Comparison
 
 DeviceForge will compare solvers using:
 
