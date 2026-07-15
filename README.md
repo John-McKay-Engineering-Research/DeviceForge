@@ -91,6 +91,42 @@ Run the example with:
 python examples/poisson_uniform_charge.py
 ```
 
+## Simplified PN-Junction Electrostatics
+
+DeviceForge includes a two-dimensional fixed-charge PN-junction
+demonstration with separate p-type and n-type silicon regions.
+
+The example visualises:
+
+- Signed donor and acceptor doping
+- Fixed charge density
+- Electrostatic potential
+- Electric-field magnitude and direction
+- Centre-line device profiles
+- Solver convergence
+
+### Doping Distribution
+
+![PN-junction doping distribution](examples/figures/examples/pn_junction_doping.png)
+
+### Fixed Charge Density
+
+![PN-junction fixed charge density](examples/figures/examples/pn_junction_charge_density.png)
+
+### Electrostatic Potential
+
+![PN-junction electrostatic potential](examples/figures/examples/pn_junction_potential.png)
+
+### Centre-Line Profiles
+
+![PN-junction centre-line profiles](examples/figures/examples/pn_junction_profiles.png)
+
+Run the demonstration with:
+
+```powershell
+python examples/pn_junction_fixed_charge.py
+```
+
 ## Project Status
 
 DeviceForge is currently under active development.
