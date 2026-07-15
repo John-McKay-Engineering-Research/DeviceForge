@@ -64,6 +64,33 @@ Run the benchmark with:
 python benchmarks/compare_iterative_solvers.py
 ```
 
+## Poisson Electrostatics Demonstration
+
+DeviceForge includes a validated two-dimensional Poisson solver using fixed
+semiconductor charge derived from donor and acceptor doping.
+
+### Uniform Fixed-Charge Potential
+
+![Uniform fixed-charge Poisson solution](examples/figures/examples/poisson_uniform_potential.png)
+
+### Analytical Validation
+
+![Numerical and analytical Poisson comparison](examples/figures/examples/poisson_analytical_comparison.png)
+
+### Electric-Field Profile
+
+![Uniform-charge electric-field profile](examples/figures/examples/poisson_electric_field.png)
+
+### Poisson Convergence
+
+![Poisson solver convergence](examples/figures/examples/poisson_convergence.png)
+
+Run the example with:
+
+```powershell
+python examples/poisson_uniform_charge.py
+```
+
 ## Project Status
 
 DeviceForge is currently under active development.
