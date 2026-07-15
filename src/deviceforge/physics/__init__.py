@@ -16,6 +16,14 @@ from .materials import (
     Material,
 )
 
+from .equilibrium import (
+    DEFAULT_SILICON_INTRINSIC_CONCENTRATION,
+    charge_neutral_potential,
+    compute_equilibrium_charge_density,
+    equilibrium_carrier_concentrations,
+    thermal_voltage,
+)
+
 __all__ = [
     "BOLTZMANN_CONSTANT",
     "ELEMENTARY_CHARGE",
@@ -28,4 +36,9 @@ __all__ = [
     "compute_absolute_permittivity",
     "compute_electrostatic_source_term",
     "compute_fixed_charge_density",
+    "DEFAULT_SILICON_INTRINSIC_CONCENTRATION",
+    "charge_neutral_potential",
+    "compute_equilibrium_charge_density",
+    "equilibrium_carrier_concentrations",
+    "thermal_voltage",
 ]
