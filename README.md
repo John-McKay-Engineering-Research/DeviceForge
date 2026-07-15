@@ -127,6 +127,44 @@ Run the demonstration with:
 python examples/pn_junction_fixed_charge.py
 ```
 
+## Self-Consistent Equilibrium PN Junction
+
+DeviceForge includes a nonlinear equilibrium PN-junction model coupling
+electrostatic potential with mobile electron and hole concentrations.
+
+The model solves:
+
+\[
+\nabla^2\phi
++
+\frac{q}{\varepsilon}
+\left(
+p-n+N_D-N_A
+\right)
+=
+0
+\]
+
+using Boltzmann carrier statistics and a damped pointwise Newton method.
+
+### Equilibrium Potential
+
+![Equilibrium PN-junction potential](examples/figures/examples/equilibrium_pn_potential.png)
+
+### Space-Charge Density
+
+![Equilibrium PN-junction charge density](examples/figures/examples/equilibrium_pn_charge_density.png)
+
+### Potential, Carriers and Electric Field
+
+![Equilibrium PN-junction profiles](examples/figures/examples/equilibrium_pn_profiles.png)
+
+Run the demonstration with:
+
+```powershell
+python examples/pn_junction_equilibrium.py
+```
+
 ## Project Status
 
 DeviceForge is currently under active development.
