@@ -1,14 +1,23 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+# fix for pytest
+from typing import TYPE_CHECKING
 
 import numpy as np
 from numpy.typing import NDArray
 
-from deviceforge.physics import Material
+# NOTE***
+# These fixes are to stop circular imports
+
+# from deviceforge.physics import Material
+# a fix to stop python pytest failure
+# from deviceforge.physics.materials import Material
 
 from .grid import Grid
 
+if TYPE_CHECKING:
+    from deviceforge.physics.materials import Material
 
 @dataclass(frozen=True, slots=True)
 class Region:
