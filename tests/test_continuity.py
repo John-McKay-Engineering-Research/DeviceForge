@@ -304,3 +304,68 @@ def test_non_finite_current_is_rejected(
     ):
         compute_current_divergence_x(current)
 """
+
+# additional tests continuity coupling tests
+
+def test_electron_continuity_includes_recombination(
+    edge_grid: Grid,
+) -> None:
+    current = Field.full(
+        name="electron_current_density_x_edges",
+        units="A/m^2",
+        grid=edge_grid,
+        fill_value=5.0,
+    )
+
+    base_residual = compute_electron_continuity_residual(
+        current
+    )
+
+    recombination = Field.full(
+        name="srh_recombination_rate",
+        units="1/(m^3 s)",
+        grid=base_residual.grid,
+        fill_value=2.0e20,
+    )
+
+    residual = compute_electron_continuity_residual(
+        current,
+        recombination_rate=recombination,
+    )
+
+    np.testing.assert_allclose(
+        residual.values,
+        -2.0e20,
+    )
+
+
+def test_hole_continuity_includes_recombination(
+    edge_grid: Grid,
+) -> None:
+    current = Field.full(
+        name="hole_current_density_x_edges",
+        units="A/m^2",
+        grid=edge_grid,
+        fill_value=5.0,
+    )
+
+    base_residual = compute_hole_continuity_residual(
+        current
+    )
+
+    recombination = Field.full(
+        name="srh_recombination_rate",
+        units="1/(m^3 s)",
+        grid=base_residual.grid,
+        fill_value=2.0e20,
+    )
+
+    residual = compute_hole_continuity_residual(
+        current,
+        recombination_rate=recombination,
+    )
+
+    np.testing.assert_allclose(
+        residual.values,
+        -2.0e20,
+    )

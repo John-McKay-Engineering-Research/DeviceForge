@@ -45,6 +45,12 @@ from .continuity import (
     maximum_absolute_continuity_residual,
 )
 
+from .recombination import (
+    SRHParameters,
+    compute_net_generation_rate,
+    compute_shockley_read_hall_rate,
+)
+
 __all__ = [
     "BOLTZMANN_CONSTANT",
     "ELEMENTARY_CHARGE",
@@ -74,4 +80,7 @@ __all__ = [
     "compute_electron_continuity_residual",
     "compute_hole_continuity_residual",
     "maximum_absolute_continuity_residual",
+    "SRHParameters",
+    "compute_net_generation_rate",
+    "compute_shockley_read_hall_rate",
 ]

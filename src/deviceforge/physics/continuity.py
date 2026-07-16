@@ -58,81 +58,87 @@ def compute_current_divergence_x(
 
 def compute_electron_continuity_residual(
     electron_edge_current_density: Field,
+    *,
+    recombination_rate: Field | None = None,
 ) -> Field:
     """
     Calculate the steady-state electron continuity residual.
 
-    With no generation or recombination:
+    The residual is:
 
-        R_n = (1 / q) div(J_n)
+        R_n = div(J_n) / q - U
 
-    A converged steady-state solution satisfies:
-
-        R_n = 0
-
-    Parameters
-    ----------
-    electron_edge_current_density:
-        Electron current density on x-directed edges in A/m^2.
-
-    Returns
-    -------
-    Field
-        Electron carrier-rate residual in 1/(m^3 s).
+    where positive U represents net recombination.
     """
 
     divergence = compute_current_divergence_x(
         electron_edge_current_density
     )
 
+    values = (
+        divergence.values
+        / ELEMENTARY_CHARGE
+    )
+
+    if recombination_rate is not None:
+        _validate_recombination_for_interior_grid(
+            recombination_rate=recombination_rate,
+            interior_grid=divergence.grid,
+        )
+
+        values = (
+            values
+            - recombination_rate.values
+        )
+
     return Field(
         name="electron_continuity_residual",
         units="1/(m^3 s)",
         grid=divergence.grid,
-        values=(
-            divergence.values
-            / ELEMENTARY_CHARGE
-        ),
+        values=values,
     )
 
 
 def compute_hole_continuity_residual(
     hole_edge_current_density: Field,
+    *,
+    recombination_rate: Field | None = None,
 ) -> Field:
     """
     Calculate the steady-state hole continuity residual.
 
-    With no generation or recombination:
+    The residual is:
 
-        R_p = -(1 / q) div(J_p)
+        R_p = -div(J_p) / q - U
 
-    A converged steady-state solution satisfies:
-
-        R_p = 0
-
-    Parameters
-    ----------
-    hole_edge_current_density:
-        Hole current density on x-directed edges in A/m^2.
-
-    Returns
-    -------
-    Field
-        Hole carrier-rate residual in 1/(m^3 s).
+    where positive U represents net recombination.
     """
 
     divergence = compute_current_divergence_x(
         hole_edge_current_density
     )
 
+    values = (
+        -divergence.values
+        / ELEMENTARY_CHARGE
+    )
+
+    if recombination_rate is not None:
+        _validate_recombination_for_interior_grid(
+            recombination_rate=recombination_rate,
+            interior_grid=divergence.grid,
+        )
+
+        values = (
+            values
+            - recombination_rate.values
+        )
+
     return Field(
         name="hole_continuity_residual",
         units="1/(m^3 s)",
         grid=divergence.grid,
-        values=(
-            -divergence.values
-            / ELEMENTARY_CHARGE
-        ),
+        values=values,
     )
 
 
@@ -219,4 +225,22 @@ def _validate_edge_current(
     ):
         raise ValueError(
             "Edge current density must contain only finite values."
+        )
+
+# helper function
+def _validate_recombination_for_interior_grid(
+    *,
+    recombination_rate: Field,
+    interior_grid: Grid,
+) -> None:
+    """Validate recombination supplied to a continuity residual."""
+
+    if recombination_rate.grid != interior_grid:
+        raise ValueError(
+            "Recombination rate must use the interior-node grid."
+        )
+
+    if recombination_rate.units != "1/(m^3 s)":
+        raise ValueError(
+            "Recombination rate must use units of 1/(m^3 s)."
         )
