@@ -24,6 +24,13 @@ from .equilibrium import (
     thermal_voltage,
 )
 
+from .transport import (
+    compute_electron_current_density,
+    compute_hole_current_density,
+    compute_total_current_density,
+    diffusion_coefficient,
+)
+
 __all__ = [
     "BOLTZMANN_CONSTANT",
     "ELEMENTARY_CHARGE",
@@ -41,4 +48,8 @@ __all__ = [
     "compute_equilibrium_charge_density",
     "equilibrium_carrier_concentrations",
     "thermal_voltage",
+    "compute_electron_current_density",
+    "compute_hole_current_density",
+    "compute_total_current_density",
+    "diffusion_coefficient",
 ]
