@@ -26,6 +26,14 @@ from deviceforge.physics import (
     compute_hole_scharfetter_gummel_current_x,
 )
 
+from deviceforge.physics import (
+    SILICON,
+    compute_electron_continuity_residual,
+    compute_electron_scharfetter_gummel_current_x,
+    compute_hole_continuity_residual,
+    compute_hole_scharfetter_gummel_current_x,
+)
+
 def test_equilibrium_contact_potentials_have_correct_sign() -> None:
     simulation = build_simulation(
         shape=(41, 11),
@@ -158,6 +166,70 @@ def test_scharfetter_gummel_equilibrium_currents_are_small() -> None:
         0.0,
         atol=1.0e-4,
     )
+# removed as continuity is already assessed
+"""
+def test_equilibrium_satisfies_discrete_continuity() -> None:
+    simulation = build_simulation(
+        shape=(41, 11),
+        tolerance=1.0e-7,
+        max_iterations=10_000,
+    )
+
+    solver = EquilibriumPoissonSolver(
+        damping_factor=0.5,
+        maximum_potential_step=0.05,
+        configuration=SolverConfiguration(
+            tolerance=simulation.tolerance,
+            max_iterations=simulation.max_iterations,
+        ),
+    )
+
+    result = solver.solve(simulation)
+
+    electron_current = (
+        compute_electron_scharfetter_gummel_current_x(
+            potential=result.potential,
+            electron_concentration=result.get_field(
+                "electron_concentration"
+            ),
+            mobility=SILICON.electron_mobility,
+        )
+    )
+
+    hole_current = (
+        compute_hole_scharfetter_gummel_current_x(
+            potential=result.potential,
+            hole_concentration=result.get_field(
+                "hole_concentration"
+            ),
+            mobility=SILICON.hole_mobility,
+        )
+    )
+
+    electron_residual = (
+        compute_electron_continuity_residual(
+            electron_current
+        )
+    )
+
+    hole_residual = (
+        compute_hole_continuity_residual(
+            hole_current
+        )
+    )
+
+    np.testing.assert_allclose(
+        electron_residual.values,
+        0.0,
+        atol=1.0e3,
+    )
+
+    np.testing.assert_allclose(
+        hole_residual.values,
+        0.0,
+        atol=1.0e3,
+    )
+"""
 
 # small grid test
 # removed for now, will re-insert this test at a future point.

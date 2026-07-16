@@ -38,6 +38,13 @@ from .scharfetter_gummel import (
     compute_total_scharfetter_gummel_current_x,
 )
 
+from .continuity import (
+    compute_current_divergence_x,
+    compute_electron_continuity_residual,
+    compute_hole_continuity_residual,
+    maximum_absolute_continuity_residual,
+)
+
 __all__ = [
     "BOLTZMANN_CONSTANT",
     "ELEMENTARY_CHARGE",
@@ -63,4 +70,8 @@ __all__ = [
     "compute_electron_scharfetter_gummel_current_x",
     "compute_hole_scharfetter_gummel_current_x",
     "compute_total_scharfetter_gummel_current_x",
+    "compute_current_divergence_x",
+    "compute_electron_continuity_residual",
+    "compute_hole_continuity_residual",
+    "maximum_absolute_continuity_residual",
 ]
