@@ -20,6 +20,12 @@ from deviceforge.physics import (
 )
 from deviceforge.postprocessing import compute_electric_field
 
+from deviceforge.physics import (
+    SILICON,
+    compute_electron_scharfetter_gummel_current_x,
+    compute_hole_scharfetter_gummel_current_x,
+)
+
 def test_equilibrium_contact_potentials_have_correct_sign() -> None:
     simulation = build_simulation(
         shape=(41, 11),
@@ -100,6 +106,57 @@ def test_small_equilibrium_junction_converges() -> None:
     assert (
         result.final_residual
         <= simulation.tolerance
+    )
+
+
+def test_scharfetter_gummel_equilibrium_currents_are_small() -> None:
+    simulation = build_simulation(
+        shape=(41, 11),
+        tolerance=1.0e-7,
+        max_iterations=10_000,
+    )
+
+    solver = EquilibriumPoissonSolver(
+        damping_factor=0.5,
+        maximum_potential_step=0.05,
+        configuration=SolverConfiguration(
+            tolerance=simulation.tolerance,
+            max_iterations=simulation.max_iterations,
+        ),
+    )
+
+    result = solver.solve(simulation)
+
+    electron_current = (
+        compute_electron_scharfetter_gummel_current_x(
+            potential=result.potential,
+            electron_concentration=result.get_field(
+                "electron_concentration"
+            ),
+            mobility=SILICON.electron_mobility,
+        )
+    )
+
+    hole_current = (
+        compute_hole_scharfetter_gummel_current_x(
+            potential=result.potential,
+            hole_concentration=result.get_field(
+                "hole_concentration"
+            ),
+            mobility=SILICON.hole_mobility,
+        )
+    )
+
+    np.testing.assert_allclose(
+        electron_current.values,
+        0.0,
+        atol=1.0e-4,
+    )
+
+    np.testing.assert_allclose(
+        hole_current.values,
+        0.0,
+        atol=1.0e-4,
     )
 
 # small grid test

@@ -31,6 +31,13 @@ from .transport import (
     diffusion_coefficient,
 )
 
+from .scharfetter_gummel import (
+    bernoulli_function,
+    compute_electron_scharfetter_gummel_current_x,
+    compute_hole_scharfetter_gummel_current_x,
+    compute_total_scharfetter_gummel_current_x,
+)
+
 __all__ = [
     "BOLTZMANN_CONSTANT",
     "ELEMENTARY_CHARGE",
@@ -52,4 +59,8 @@ __all__ = [
     "compute_hole_current_density",
     "compute_total_current_density",
     "diffusion_coefficient",
+    "bernoulli_function",
+    "compute_electron_scharfetter_gummel_current_x",
+    "compute_hole_scharfetter_gummel_current_x",
+    "compute_total_scharfetter_gummel_current_x",
 ]
