@@ -31,9 +31,15 @@ from deviceforge.physics.scharfetter_gummel import (
 from deviceforge.physics.transport import (
     diffusion_coefficient,
 )
+from deviceforge.physics import (
+    compute_electron_scharfetter_gummel_current_x,
+    compute_hole_scharfetter_gummel_current_x,
+    compute_total_scharfetter_gummel_current_x,
+)
 
 from .base import BaseSolver, SolverConfiguration
 from .tridiagonal import solve_tridiagonal
+
 
 
 class GummelDriftDiffusionSolver1D(BaseSolver):
@@ -407,6 +413,50 @@ class GummelDriftDiffusionSolver1D(BaseSolver):
             )
         )
 
+        # added
+        electron_current_field = (
+            compute_electron_scharfetter_gummel_current_x(
+                potential=potential_field,
+                electron_concentration=electron_field,
+                mobility=self._electron_mobility,
+                temperature=self._temperature,
+            )
+        )
+        # added
+        hole_current_field = (
+            compute_hole_scharfetter_gummel_current_x(
+                potential=potential_field,
+                hole_concentration=hole_field,
+                mobility=self._hole_mobility,
+                temperature=self._temperature,
+            )
+        )
+        # added
+        total_current_field = (
+            compute_total_scharfetter_gummel_current_x(
+                electron_current_density=electron_current_field,
+                hole_current_density=hole_current_field,
+            )
+        )
+        # added
+        left_terminal_current_density = float(
+            total_current_field.values[0]
+        )
+
+        right_terminal_current_density = float(
+            total_current_field.values[-1]
+        )
+        # added
+        average_terminal_current_density = 0.5 * (
+                left_terminal_current_density
+                + right_terminal_current_density
+        )
+        # added
+        current_density_nonuniformity = float(
+            np.max(total_current_field.values)
+            - np.min(total_current_field.values)
+        )
+
         return SimulationResult(
             fields={
                 "electrostatic_potential": potential_field,
@@ -418,6 +468,17 @@ class GummelDriftDiffusionSolver1D(BaseSolver):
                 "shockley_read_hall_recombination_rate": (
                     recombination_field
                 ),
+                # added
+                "electron_current_density_x_edges": (
+                    electron_current_field
+                ),
+                "hole_current_density_x_edges": (
+                    hole_current_field
+                ),
+                "total_current_density_x_edges": (
+                    total_current_field
+                ),
+
             },
             converged=converged,
             iterations=len(residual_history),
@@ -439,6 +500,20 @@ class GummelDriftDiffusionSolver1D(BaseSolver):
                 "temperature_kelvin": self._temperature,
                 "tolerance": tolerance,
                 "maximum_iterations": maximum_iterations,
+                "left_terminal_current_density": (
+                    left_terminal_current_density
+                ),
+                # added
+                "right_terminal_current_density": (
+                    right_terminal_current_density
+                ),
+                "average_terminal_current_density": (
+                    average_terminal_current_density
+                ),
+                "current_density_nonuniformity": (
+                    current_density_nonuniformity
+                ),
+                "terminal_current_density_units": "A/m^2",
             },
         )
 

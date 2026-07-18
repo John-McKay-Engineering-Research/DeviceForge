@@ -135,15 +135,15 @@ def compute_electron_scharfetter_gummel_current_x(
 
     voltage = thermal_voltage(temperature)
     spacing_x = potential.grid.spacing[0]
-
-    potential_left = potential.values[:-1, :]
-    potential_right = potential.values[1:, :]
+    # updated to support 1 and 2 dimensions
+    potential_left = potential.values[:-1]
+    potential_right = potential.values[1:]
 
     concentration_left = (
-        electron_concentration.values[:-1, :]
+        electron_concentration.values[:-1]
     )
     concentration_right = (
-        electron_concentration.values[1:, :]
+        electron_concentration.values[1:]
     )
 
     normalised_potential_difference = (
@@ -226,15 +226,15 @@ def compute_hole_scharfetter_gummel_current_x(
 
     voltage = thermal_voltage(temperature)
     spacing_x = potential.grid.spacing[0]
-
-    potential_left = potential.values[:-1, :]
-    potential_right = potential.values[1:, :]
+    # updated to support 1 and 2 dimensions
+    potential_left = potential.values[:-1]
+    potential_right = potential.values[1:]
 
     concentration_left = (
-        hole_concentration.values[:-1, :]
+        hole_concentration.values[:-1]
     )
     concentration_right = (
-        hole_concentration.values[1:, :]
+        hole_concentration.values[1:]
     )
 
     normalised_potential_difference = (
@@ -305,26 +305,39 @@ def compute_total_scharfetter_gummel_current_x(
         ),
     )
 
-
+# updated to support 1 and 2 dimensions
 def _create_x_edge_grid(
     node_grid: Grid,
 ) -> Grid:
     """
     Create a grid representing centres of x-directed node edges.
 
-    A node grid with shape ``(nx, ny)`` has ``nx - 1`` x-directed
-    intervals, so its edge-centred grid has shape ``(nx - 1, ny)``.
+    For a one-dimensional node grid with shape ``(nx,)``, the edge grid
+    has shape ``(nx - 1,)``.
+
+    For a two-dimensional node grid with shape ``(nx, ny)``, the edge grid
+    has shape ``(nx - 1, ny)``.
     """
 
-    if node_grid.dimension != 2:
+    if node_grid.dimension not in (1, 2):
         raise ValueError(
             "Scharfetter-Gummel transport currently supports "
-            "two-dimensional grids."
+            "one-dimensional and two-dimensional grids."
         )
 
     if node_grid.shape[0] < 2:
         raise ValueError(
             "At least two x-direction grid points are required."
+        )
+
+    if node_grid.dimension == 1:
+        return Grid(
+            shape=(node_grid.shape[0] - 1,),
+            spacing=node_grid.spacing,
+            origin=(
+                node_grid.origin[0]
+                + 0.5 * node_grid.spacing[0],
+            ),
         )
 
     return Grid(
@@ -354,11 +367,11 @@ def _validate_scharfetter_gummel_inputs(
             "Potential and carrier concentration must use "
             "the same node grid."
         )
-
-    if potential.grid.dimension != 2:
+    # updated to support 1 and 2 dimensions
+    if potential.grid.dimension not in (1, 2):
         raise ValueError(
             "Scharfetter-Gummel transport currently supports "
-            "two-dimensional grids."
+            "one-dimensional and two-dimensional grids."
         )
 
     if potential.grid.shape[0] < 2:

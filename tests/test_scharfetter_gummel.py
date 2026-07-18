@@ -381,3 +381,73 @@ def test_total_edge_current(
         total.values,
         5.0,
     )
+
+# added 1 dimensional test for electrons
+def test_one_dimensional_electron_current() -> None:
+    grid = Grid(
+        shape=(11,),
+        spacing=(1.0e-9,),
+    )
+
+    potential = Field.zeros(
+        name="electrostatic_potential",
+        units="V",
+        grid=grid,
+    )
+
+    electrons = Field.full(
+        name="electron_concentration",
+        units="1/m^3",
+        grid=grid,
+        fill_value=1.0e20,
+    )
+
+    current = (
+        compute_electron_scharfetter_gummel_current_x(
+            potential=potential,
+            electron_concentration=electrons,
+            mobility=0.135,
+        )
+    )
+
+    assert current.grid.shape == (10,)
+
+    np.testing.assert_allclose(
+        current.values,
+        0.0,
+    )
+
+# added 1 dimensional test for holes
+def test_one_dimensional_hole_current() -> None:
+    grid = Grid(
+        shape=(11,),
+        spacing=(1.0e-9,),
+    )
+
+    potential = Field.zeros(
+        name="electrostatic_potential",
+        units="V",
+        grid=grid,
+    )
+
+    holes = Field.full(
+        name="hole_concentration",
+        units="1/m^3",
+        grid=grid,
+        fill_value=1.0e20,
+    )
+
+    current = (
+        compute_hole_scharfetter_gummel_current_x(
+            potential=potential,
+            hole_concentration=holes,
+            mobility=0.048,
+        )
+    )
+
+    assert current.grid.shape == (10,)
+
+    np.testing.assert_allclose(
+        current.values,
+        0.0,
+    )

@@ -212,8 +212,8 @@ def test_non_field_value_raises_type_error(
             solver_name="jacobi",
         )
 
-
-def test_fields_from_different_grids_raise_value_error(
+# replaced test
+def test_fields_on_different_same_dimension_grids_are_allowed(
     grid_2d: Grid,
     potential_field: Field,
 ) -> None:
@@ -228,19 +228,58 @@ def test_fields_from_different_grids_raise_value_error(
         grid=other_grid,
     )
 
-    with pytest.raises(ValueError, match="same computational grid"):
+    result = SimulationResult(
+        fields={
+            "electrostatic_potential": potential_field,
+            "charge_density": other_field,
+        },
+        converged=True,
+        iterations=0,
+        residual_history=np.array([], dtype=float),
+        runtime_seconds=0.0,
+        solver_name="test_solver",
+        backend_name="cpu",
+    )
+
+    assert result.get_field(
+        "electrostatic_potential"
+    ) is potential_field
+
+    assert result.get_field(
+        "charge_density"
+    ) is other_field
+
+# addtional new test
+def test_fields_with_different_dimensions_raise_value_error(
+    potential_field: Field,
+) -> None:
+    grid_1d = Grid(
+        shape=(5,),
+        spacing=(1.0e-9,),
+    )
+
+    field_1d = Field.zeros(
+        name="line_charge_density",
+        units="C/m^3",
+        grid=grid_1d,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="same spatial dimension",
+    ):
         SimulationResult(
             fields={
                 "electrostatic_potential": potential_field,
-                "charge_density": other_field,
+                "line_charge_density": field_1d,
             },
-            converged=False,
+            converged=True,
             iterations=0,
-            residual_history=np.array([]),
+            residual_history=np.array([], dtype=float),
             runtime_seconds=0.0,
-            solver_name="jacobi",
+            solver_name="test_solver",
+            backend_name="cpu",
         )
-
 
 def test_residual_length_must_match_iterations(
     potential_field: Field,

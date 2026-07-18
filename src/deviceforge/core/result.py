@@ -72,15 +72,15 @@ class SimulationResult:
             raise TypeError(
                 "Every value in fields must be a Field instance."
             )
-
-        grids = {
-            field_value.grid
+        # changed to accommodate multi dimensional fields
+        dimensions = {
+            field_value.grid.dimension
             for field_value in normalised_fields.values()
         }
 
-        if len(grids) != 1:
+        if len(dimensions) != 1:
             raise ValueError(
-                "All result fields must use the same computational grid."
+                "All result fields must have the same spatial dimension."
             )
 
         if isinstance(self.iterations, bool) or not isinstance(
