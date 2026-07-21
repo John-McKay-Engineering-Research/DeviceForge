@@ -436,16 +436,25 @@ class GummelDriftDiffusionSolver1D(BaseSolver):
                 spacing=spacing,
             )
 
-            (
-                electron_continuity_residual,
-                hole_continuity_residual,
-            ) = self._continuity_residuals(
+            continuity_diagnostics = self._continuity_diagnostics(
                 electron_current=(
                     electron_current_field.values
                 ),
                 hole_current=hole_current_field.values,
                 recombination=final_recombination,
                 spacing=spacing,
+            )
+
+            electron_continuity_residual = (
+                continuity_diagnostics[
+                    "electron_continuity_relative_defect"
+                ]
+            )
+
+            hole_continuity_residual = (
+                continuity_diagnostics[
+                    "hole_continuity_relative_defect"
+                ]
             )
 
             (
@@ -576,14 +585,23 @@ class GummelDriftDiffusionSolver1D(BaseSolver):
             spacing=spacing,
         )
 
-        (
-            final_electron_continuity_residual,
-            final_hole_continuity_residual,
-        ) = self._continuity_residuals(
+        final_continuity_diagnostics = self._continuity_diagnostics(
             electron_current=electron_current_field.values,
             hole_current=hole_current_field.values,
             recombination=recombination_field.values,
             spacing=spacing,
+        )
+
+        final_electron_continuity_residual = (
+            final_continuity_diagnostics[
+                "electron_continuity_relative_defect"
+            ]
+        )
+
+        final_hole_continuity_residual = (
+            final_continuity_diagnostics[
+                "hole_continuity_relative_defect"
+            ]
         )
 
         (
@@ -727,6 +745,43 @@ class GummelDriftDiffusionSolver1D(BaseSolver):
                 "final_hole_continuity_residual": (
                     final_hole_continuity_residual
                 ),
+                "maximum_electron_current_divergence": (
+                    final_continuity_diagnostics[
+                        "maximum_electron_current_divergence"
+                    ]
+                ),
+                "maximum_hole_current_divergence": (
+                    final_continuity_diagnostics[
+                        "maximum_hole_current_divergence"
+                    ]
+                ),
+                "maximum_recombination_current_source": (
+                    final_continuity_diagnostics[
+                        "maximum_recombination_current_source"
+                    ]
+                ),
+                "maximum_electron_continuity_defect": (
+                    final_continuity_diagnostics[
+                        "maximum_electron_continuity_defect"
+                    ]
+                ),
+                "maximum_hole_continuity_defect": (
+                    final_continuity_diagnostics[
+                        "maximum_hole_continuity_defect"
+                    ]
+                ),
+                "electron_continuity_relative_defect": (
+                    final_continuity_diagnostics[
+                        "electron_continuity_relative_defect"
+                    ]
+                ),
+                "hole_continuity_relative_defect": (
+                    final_continuity_diagnostics[
+                        "hole_continuity_relative_defect"
+                    ]
+                ),
+                "continuity_raw_diagnostic_units": "A/m^3",
+                "continuity_relative_defect_units": "dimensionless",
                 "final_electron_quasi_fermi_nonuniformity": (
                     electron_quasi_fermi_nonuniformity
                 ),
@@ -1045,68 +1100,181 @@ class GummelDriftDiffusionSolver1D(BaseSolver):
         return float(np.max(np.abs(defect)) / scale)
 
     @staticmethod
-    def _continuity_residuals(
+    def _continuity_diagnostics(
         *,
         electron_current: np.ndarray,
         hole_current: np.ndarray,
         recombination: np.ndarray,
         spacing: float,
-    ) -> tuple[float, float]:
-        """Return dimensionless electron and hole continuity residuals."""
+    ) -> dict[str, float]:
+        """Return raw and normalized continuity-equation diagnostics.
 
-        electron_divergence = (
-            electron_current[1:] - electron_current[:-1]
+        Current densities are defined on cell edges, while recombination is
+        defined at grid nodes. Differencing adjacent edge currents therefore
+        produces a divergence associated with the interior nodes.
+        """
+
+        electron_current = np.asarray(
+            electron_current,
+            dtype=np.float64,
+        )
+        hole_current = np.asarray(
+            hole_current,
+            dtype=np.float64,
+        )
+        recombination = np.asarray(
+            recombination,
+            dtype=np.float64,
+        )
+
+        if electron_current.ndim != 1:
+            raise ValueError(
+                "Electron current must be one-dimensional."
+            )
+
+        if hole_current.ndim != 1:
+            raise ValueError(
+                "Hole current must be one-dimensional."
+            )
+
+        if recombination.ndim != 1:
+            raise ValueError(
+                "Recombination must be one-dimensional."
+            )
+
+        if recombination.size < 3:
+            raise ValueError(
+                "At least three recombination nodes are required."
+            )
+
+        expected_current_size = recombination.size - 1
+
+        if electron_current.size != expected_current_size:
+            raise ValueError(
+                "Electron edge-current size must equal the number "
+                "of recombination nodes minus one."
+            )
+
+        if hole_current.size != expected_current_size:
+            raise ValueError(
+                "Hole edge-current size must equal the number "
+                "of recombination nodes minus one."
+            )
+
+        if not np.isfinite(spacing) or spacing <= 0.0:
+            raise ValueError(
+                "Grid spacing must be positive and finite."
+            )
+
+        if not np.all(np.isfinite(electron_current)):
+            raise ValueError(
+                "Electron current must contain only finite values."
+            )
+
+        if not np.all(np.isfinite(hole_current)):
+            raise ValueError(
+                "Hole current must contain only finite values."
+            )
+
+        if not np.all(np.isfinite(recombination)):
+            raise ValueError(
+                "Recombination must contain only finite values."
+            )
+
+        electron_divergence = np.diff(
+            electron_current
         ) / spacing
 
-        hole_divergence = (
-            hole_current[1:] - hole_current[:-1]
+        hole_divergence = np.diff(
+            hole_current
         ) / spacing
 
         recombination_current_source = (
-            ELEMENTARY_CHARGE * recombination[1:-1]
+            ELEMENTARY_CHARGE
+            * recombination[1:-1]
         )
 
         electron_defect = (
             electron_divergence
             - recombination_current_source
         )
+
         hole_defect = (
             hole_divergence
             + recombination_current_source
         )
 
+        maximum_electron_current_divergence = float(
+            np.max(np.abs(electron_divergence))
+        )
+
+        maximum_hole_current_divergence = float(
+            np.max(np.abs(hole_divergence))
+        )
+
+        maximum_recombination_current_source = float(
+            np.max(
+                np.abs(
+                    recombination_current_source
+                )
+            )
+        )
+
+        maximum_electron_continuity_defect = float(
+            np.max(np.abs(electron_defect))
+        )
+
+        maximum_hole_continuity_defect = float(
+            np.max(np.abs(hole_defect))
+        )
+
         tiny = np.finfo(np.float64).tiny
 
         electron_scale = max(
-            float(np.max(np.abs(electron_divergence))),
-            float(
-                np.max(
-                    np.abs(recombination_current_source)
-                )
-            ),
+            maximum_electron_current_divergence,
+            maximum_recombination_current_source,
             tiny,
         )
 
         hole_scale = max(
-            float(np.max(np.abs(hole_divergence))),
-            float(
-                np.max(
-                    np.abs(recombination_current_source)
-                )
-            ),
+            maximum_hole_current_divergence,
+            maximum_recombination_current_source,
             tiny,
         )
 
-        return (
-            float(
-                np.max(np.abs(electron_defect))
-                / electron_scale
-            ),
-            float(
-                np.max(np.abs(hole_defect))
-                / hole_scale
-            ),
+        electron_relative_defect = (
+            maximum_electron_continuity_defect
+            / electron_scale
         )
+
+        hole_relative_defect = (
+            maximum_hole_continuity_defect
+            / hole_scale
+        )
+
+        return {
+            "maximum_electron_current_divergence": (
+                maximum_electron_current_divergence
+            ),
+            "maximum_hole_current_divergence": (
+                maximum_hole_current_divergence
+            ),
+            "maximum_recombination_current_source": (
+                maximum_recombination_current_source
+            ),
+            "maximum_electron_continuity_defect": (
+                maximum_electron_continuity_defect
+            ),
+            "maximum_hole_continuity_defect": (
+                maximum_hole_continuity_defect
+            ),
+            "electron_continuity_relative_defect": float(
+                electron_relative_defect
+            ),
+            "hole_continuity_relative_defect": float(
+                hole_relative_defect
+            ),
+        }
 
     @staticmethod
     def _current_nonuniformity(

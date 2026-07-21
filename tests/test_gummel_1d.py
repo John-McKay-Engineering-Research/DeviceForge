@@ -158,14 +158,25 @@ def test_intrinsic_carriers_remain_equal() -> None:
 def build_pn_junction_simulation(
     *,
     shape: tuple[int] = (81,),
+    device_length: float = 80.0e-9,
     tolerance: float = 1.0e-7,
     max_iterations: int = 2_000,
 ) -> Simulation:
     """Create a symmetric one-dimensional abrupt PN junction."""
 
+    if len(shape) != 1:
+        raise ValueError("The PN-junction grid must be one-dimensional.")
+
+    number_of_nodes = shape[0]
+
+    if number_of_nodes < 3:
+        raise ValueError("At least three grid nodes are required.")
+
+    spacing = device_length / (number_of_nodes - 1)
+
     grid = Grid(
         shape=shape,
-        spacing=(1.0e-9,),
+        spacing=(spacing,),
     )
 
     junction_index = grid.shape[0] // 2
@@ -531,3 +542,96 @@ def test_zero_bias_pn_terminal_current_is_small() -> None:
     )
 
     assert relative_terminal_current < 1.0e-7
+
+
+def test_continuity_diagnostics_are_present_and_finite() -> None:
+    simulation = build_pn_junction_simulation()
+
+    result = GummelDriftDiffusionSolver1D(
+        applied_voltage=0.05,
+        damping_factor=0.2,
+        configuration=SolverConfiguration(
+            tolerance=1.0e-10,
+            max_iterations=simulation.max_iterations,
+        ),
+    ).solve(simulation)
+
+    diagnostic_keys = (
+        "maximum_electron_current_divergence",
+        "maximum_hole_current_divergence",
+        "maximum_recombination_current_source",
+        "maximum_electron_continuity_defect",
+        "maximum_hole_continuity_defect",
+        "electron_continuity_relative_defect",
+        "hole_continuity_relative_defect",
+    )
+
+    for key in diagnostic_keys:
+        assert key in result.metadata
+        assert np.isfinite(result.metadata[key])
+        assert result.metadata[key] >= 0.0
+
+    assert (
+        result.metadata[
+            "continuity_raw_diagnostic_units"
+        ]
+        == "A/m^3"
+    )
+
+    assert (
+        result.metadata[
+            "continuity_relative_defect_units"
+        ]
+        == "dimensionless"
+    )
+
+
+def test_continuity_diagnostics_align_edges_with_interior_nodes() -> None:
+    electron_current = np.asarray(
+        [1.0, 2.0, 3.0, 4.0],
+        dtype=np.float64,
+    )
+
+    hole_current = np.asarray(
+        [4.0, 3.0, 2.0, 1.0],
+        dtype=np.float64,
+    )
+
+    recombination = np.zeros(
+        5,
+        dtype=np.float64,
+    )
+
+    diagnostics = (
+        GummelDriftDiffusionSolver1D
+        ._continuity_diagnostics(
+            electron_current=electron_current,
+            hole_current=hole_current,
+            recombination=recombination,
+            spacing=1.0,
+        )
+    )
+
+    assert diagnostics[
+        "maximum_electron_current_divergence"
+    ] == pytest.approx(1.0)
+
+    assert diagnostics[
+        "maximum_hole_current_divergence"
+    ] == pytest.approx(1.0)
+
+    assert diagnostics[
+        "maximum_electron_continuity_defect"
+    ] == pytest.approx(1.0)
+
+    assert diagnostics[
+        "maximum_hole_continuity_defect"
+    ] == pytest.approx(1.0)
+
+    assert diagnostics[
+        "electron_continuity_relative_defect"
+    ] == pytest.approx(1.0)
+
+    assert diagnostics[
+        "hole_continuity_relative_defect"
+    ] == pytest.approx(1.0)
