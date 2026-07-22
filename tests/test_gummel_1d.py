@@ -635,3 +635,86 @@ def test_continuity_diagnostics_align_edges_with_interior_nodes() -> None:
     assert diagnostics[
         "hole_continuity_relative_defect"
     ] == pytest.approx(1.0)
+
+def test_algebraic_continuity_diagnostics_are_present_and_finite() -> None:
+    simulation = build_pn_junction_simulation()
+
+    result = GummelDriftDiffusionSolver1D(
+        applied_voltage=0.05,
+        damping_factor=0.2,
+        configuration=SolverConfiguration(
+            tolerance=1.0e-10,
+            max_iterations=simulation.max_iterations,
+        ),
+    ).solve(simulation)
+
+    diagnostic_keys = (
+        "maximum_electron_linear_solve_algebraic_residual",
+        "electron_linear_solve_relative_algebraic_residual",
+        "maximum_hole_linear_solve_algebraic_residual",
+        "hole_linear_solve_relative_algebraic_residual",
+        "maximum_electron_damped_state_algebraic_residual",
+        "electron_damped_state_relative_algebraic_residual",
+        "maximum_hole_damped_state_algebraic_residual",
+        "hole_damped_state_relative_algebraic_residual",
+        "maximum_recombination_lag",
+        "relative_recombination_lag",
+    )
+
+    for key in diagnostic_keys:
+        assert key in result.metadata
+        assert np.isfinite(result.metadata[key])
+        assert result.metadata[key] >= 0.0
+
+    assert (
+        result.metadata[
+            "electron_linear_solve_relative_algebraic_residual"
+        ]
+        < 1.0e-10
+    )
+
+    assert (
+        result.metadata[
+            "hole_linear_solve_relative_algebraic_residual"
+        ]
+        < 1.0e-10
+    )
+
+    assert (
+        result.metadata[
+            "continuity_algebraic_residual_units"
+        ]
+        == "1/m^3"
+    )
+
+    assert (
+        result.metadata["recombination_lag_units"]
+        == "1/(m^3 s)"
+    )
+
+
+def test_algebraic_continuity_residual_is_zero_for_linear_profile() -> None:
+    solver = GummelDriftDiffusionSolver1D()
+
+    potential = np.zeros(5, dtype=np.float64)
+    recombination = np.zeros(5, dtype=np.float64)
+    candidate = np.linspace(1.0, 3.0, 5)
+
+    for carrier in ("electron", "hole"):
+        diagnostics = solver._continuity_algebraic_diagnostics(
+            carrier=carrier,
+            potential=potential,
+            recombination=recombination,
+            spacing=1.0,
+            left_value=1.0,
+            right_value=3.0,
+            candidate=candidate,
+        )
+
+        assert diagnostics[
+            "maximum_algebraic_residual"
+        ] == pytest.approx(0.0, abs=1.0e-14)
+
+        assert diagnostics[
+            "relative_algebraic_residual"
+        ] == pytest.approx(0.0, abs=1.0e-14)

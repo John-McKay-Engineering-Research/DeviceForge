@@ -324,6 +324,20 @@ class GummelDriftDiffusionSolver1D(BaseSolver):
         hole_quasi_fermi_nonuniformity_history: list[float] = []
 
         converged = False
+
+        final_algebraic_diagnostics = {
+            "maximum_electron_linear_solve_algebraic_residual": float("nan"),
+            "electron_linear_solve_relative_algebraic_residual": float("nan"),
+            "maximum_hole_linear_solve_algebraic_residual": float("nan"),
+            "hole_linear_solve_relative_algebraic_residual": float("nan"),
+            "maximum_electron_damped_state_algebraic_residual": float("nan"),
+            "electron_damped_state_relative_algebraic_residual": float("nan"),
+            "maximum_hole_damped_state_algebraic_residual": float("nan"),
+            "hole_damped_state_relative_algebraic_residual": float("nan"),
+            "maximum_recombination_lag": float("nan"),
+            "relative_recombination_lag": float("nan"),
+        }
+
         start_time = perf_counter()
 
         for _ in range(maximum_iterations):
@@ -390,6 +404,112 @@ class GummelDriftDiffusionSolver1D(BaseSolver):
                 electron_density=electron_density,
                 hole_density=hole_density,
             )
+
+            electron_linear_diagnostics = (
+                self._continuity_algebraic_diagnostics(
+                    carrier="electron",
+                    potential=potential,
+                    recombination=source_recombination,
+                    spacing=spacing,
+                    left_value=left_electron,
+                    right_value=right_electron,
+                    candidate=electron_solution,
+                )
+            )
+
+            hole_linear_diagnostics = (
+                self._continuity_algebraic_diagnostics(
+                    carrier="hole",
+                    potential=potential,
+                    recombination=source_recombination,
+                    spacing=spacing,
+                    left_value=left_hole,
+                    right_value=right_hole,
+                    candidate=hole_solution,
+                )
+            )
+
+            electron_damped_diagnostics = (
+                self._continuity_algebraic_diagnostics(
+                    carrier="electron",
+                    potential=potential,
+                    recombination=source_recombination,
+                    spacing=spacing,
+                    left_value=left_electron,
+                    right_value=right_electron,
+                    candidate=electron_density,
+                )
+            )
+
+            hole_damped_diagnostics = (
+                self._continuity_algebraic_diagnostics(
+                    carrier="hole",
+                    potential=potential,
+                    recombination=source_recombination,
+                    spacing=spacing,
+                    left_value=left_hole,
+                    right_value=right_hole,
+                    candidate=hole_density,
+                )
+            )
+
+            recombination_lag = self._recombination_lag_diagnostics(
+                source_recombination=source_recombination,
+                final_recombination=final_recombination,
+            )
+
+            final_algebraic_diagnostics = {
+                "maximum_electron_linear_solve_algebraic_residual": (
+                    electron_linear_diagnostics[
+                        "maximum_algebraic_residual"
+                    ]
+                ),
+                "electron_linear_solve_relative_algebraic_residual": (
+                    electron_linear_diagnostics[
+                        "relative_algebraic_residual"
+                    ]
+                ),
+                "maximum_hole_linear_solve_algebraic_residual": (
+                    hole_linear_diagnostics[
+                        "maximum_algebraic_residual"
+                    ]
+                ),
+                "hole_linear_solve_relative_algebraic_residual": (
+                    hole_linear_diagnostics[
+                        "relative_algebraic_residual"
+                    ]
+                ),
+                "maximum_electron_damped_state_algebraic_residual": (
+                    electron_damped_diagnostics[
+                        "maximum_algebraic_residual"
+                    ]
+                ),
+                "electron_damped_state_relative_algebraic_residual": (
+                    electron_damped_diagnostics[
+                        "relative_algebraic_residual"
+                    ]
+                ),
+                "maximum_hole_damped_state_algebraic_residual": (
+                    hole_damped_diagnostics[
+                        "maximum_algebraic_residual"
+                    ]
+                ),
+                "hole_damped_state_relative_algebraic_residual": (
+                    hole_damped_diagnostics[
+                        "relative_algebraic_residual"
+                    ]
+                ),
+                "maximum_recombination_lag": (
+                    recombination_lag[
+                        "maximum_recombination_lag"
+                    ]
+                ),
+                "relative_recombination_lag": (
+                    recombination_lag[
+                        "relative_recombination_lag"
+                    ]
+                ),
+            }
 
             (
                 electron_current_field,
@@ -736,6 +856,9 @@ class GummelDriftDiffusionSolver1D(BaseSolver):
                 "relative_current_density_nonuniformity": (
                     relative_current_density_nonuniformity
                 ),
+                **final_algebraic_diagnostics,
+                "continuity_algebraic_residual_units": "1/m^3",
+                "recombination_lag_units": "1/(m^3 s)",
                 "terminal_current_density_units": "A/m^2",
                 "final_update_residual": final_update_residual,
                 "final_poisson_residual": final_poisson_residual,
@@ -1098,6 +1221,186 @@ class GummelDriftDiffusionSolver1D(BaseSolver):
         )
 
         return float(np.max(np.abs(defect)) / scale)
+
+    def _continuity_algebraic_diagnostics(
+        self,
+        *,
+        carrier: str,
+        potential: np.ndarray,
+        recombination: np.ndarray,
+        spacing: float,
+        left_value: float,
+        right_value: float,
+        candidate: np.ndarray,
+    ) -> dict[str, float]:
+        """Evaluate the exact discrete continuity linear-system residual.
+
+        The returned residual is formed from the same Scharfetter-Gummel
+        coefficients and boundary elimination used by the corresponding
+        tridiagonal solve. The raw residual has carrier-concentration units
+        (1/m^3); the relative residual is dimensionless.
+        """
+
+        potential = np.asarray(potential, dtype=np.float64)
+        recombination = np.asarray(recombination, dtype=np.float64)
+        candidate = np.asarray(candidate, dtype=np.float64)
+
+        if carrier not in {"electron", "hole"}:
+            raise ValueError(
+                "Carrier must be either 'electron' or 'hole'."
+            )
+
+        if potential.ndim != 1:
+            raise ValueError("Potential must be one-dimensional.")
+
+        if recombination.ndim != 1:
+            raise ValueError("Recombination must be one-dimensional.")
+
+        if candidate.ndim != 1:
+            raise ValueError("Candidate solution must be one-dimensional.")
+
+        if potential.size < 3:
+            raise ValueError("At least three grid nodes are required.")
+
+        if recombination.size != potential.size:
+            raise ValueError(
+                "Recombination and potential must have equal sizes."
+            )
+
+        if candidate.size != potential.size:
+            raise ValueError(
+                "Candidate solution and potential must have equal sizes."
+            )
+
+        if not np.isfinite(spacing) or spacing <= 0.0:
+            raise ValueError(
+                "Grid spacing must be positive and finite."
+            )
+
+        for array, name in (
+            (potential, "Potential"),
+            (recombination, "Recombination"),
+            (candidate, "Candidate solution"),
+        ):
+            if not np.all(np.isfinite(array)):
+                raise ValueError(
+                    f"{name} must contain only finite values."
+                )
+
+        if not np.isfinite(left_value) or not np.isfinite(right_value):
+            raise ValueError("Boundary values must be finite.")
+
+        voltage = thermal_voltage(self._temperature)
+        delta = np.diff(potential) / voltage
+
+        if carrier == "electron":
+            diffusivity = diffusion_coefficient(
+                self._electron_mobility,
+                temperature=self._temperature,
+            )
+            lower = bernoulli_function(-delta[:-1])
+            diagonal = -(
+                bernoulli_function(delta[:-1])
+                + bernoulli_function(-delta[1:])
+            )
+            upper = bernoulli_function(delta[1:])
+        else:
+            diffusivity = diffusion_coefficient(
+                self._hole_mobility,
+                temperature=self._temperature,
+            )
+            lower = bernoulli_function(delta[:-1])
+            diagonal = -(
+                bernoulli_function(-delta[:-1])
+                + bernoulli_function(delta[1:])
+            )
+            upper = bernoulli_function(-delta[1:])
+
+        rhs = (
+            spacing**2
+            * recombination[1:-1]
+            / diffusivity
+        )
+        rhs = np.asarray(rhs, dtype=np.float64).copy()
+        rhs[0] -= lower[0] * left_value
+        rhs[-1] -= upper[-1] * right_value
+
+        interior = candidate[1:-1]
+        lhs = diagonal * interior
+        lhs[1:] += lower[1:] * interior[:-1]
+        lhs[:-1] += upper[:-1] * interior[1:]
+
+        defect = lhs - rhs
+        maximum_residual = float(np.max(np.abs(defect)))
+        scale = max(
+            float(np.max(np.abs(lhs))),
+            float(np.max(np.abs(rhs))),
+            np.finfo(np.float64).tiny,
+        )
+
+        return {
+            "maximum_algebraic_residual": maximum_residual,
+            "relative_algebraic_residual": float(
+                maximum_residual / scale
+            ),
+        }
+
+    @staticmethod
+    def _recombination_lag_diagnostics(
+        *,
+        source_recombination: np.ndarray,
+        final_recombination: np.ndarray,
+    ) -> dict[str, float]:
+        """Measure the lag between linear-solve and updated recombination."""
+
+        source_recombination = np.asarray(
+            source_recombination,
+            dtype=np.float64,
+        )
+        final_recombination = np.asarray(
+            final_recombination,
+            dtype=np.float64,
+        )
+
+        if source_recombination.ndim != 1:
+            raise ValueError(
+                "Source recombination must be one-dimensional."
+            )
+
+        if final_recombination.ndim != 1:
+            raise ValueError(
+                "Final recombination must be one-dimensional."
+            )
+
+        if source_recombination.shape != final_recombination.shape:
+            raise ValueError(
+                "Source and final recombination must have equal shapes."
+            )
+
+        if not np.all(np.isfinite(source_recombination)):
+            raise ValueError(
+                "Source recombination must contain only finite values."
+            )
+
+        if not np.all(np.isfinite(final_recombination)):
+            raise ValueError(
+                "Final recombination must contain only finite values."
+            )
+
+        difference = final_recombination - source_recombination
+        maximum_lag = float(np.max(np.abs(difference)))
+        scale = max(
+            float(np.max(np.abs(source_recombination))),
+            float(np.max(np.abs(final_recombination))),
+            np.finfo(np.float64).tiny,
+        )
+
+        return {
+            "maximum_recombination_lag": maximum_lag,
+            "relative_recombination_lag": float(
+                maximum_lag / scale
+            ),
+        }
 
     @staticmethod
     def _continuity_diagnostics(
