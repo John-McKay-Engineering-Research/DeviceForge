@@ -15,11 +15,12 @@ class Simulation:
     Validated electrostatic simulation definition.
 
     The Simulation class describes a numerical experiment. It combines a
-    semiconductor device, its boundary conditions, convergence controls and
-    an initial potential estimate.
+    semiconductor device, its boundary conditions, convergence controls,
+    an initial potential estimate, and an optional prescribed charge-density
+    field.
 
-    It does not yet implement a numerical solution algorithm. Solvers will
-    consume this object and return a SimulationResult.
+    It does not implement a numerical solution algorithm. Solvers consume
+    this object and return a SimulationResult.
 
     Parameters
     ----------
@@ -28,6 +29,10 @@ class Simulation:
 
     boundary_conditions:
         Boundary conditions applied to the device grid.
+
+    charge_density:
+        Optional prescribed volumetric charge-density field in C/m^3.
+        If omitted, the charge density is treated as zero everywhere.
 
     tolerance:
         Residual or solution-change threshold used to determine convergence.
@@ -45,6 +50,7 @@ class Simulation:
 
     device: Device
     boundary_conditions: tuple[BoundaryCondition, ...]
+    charge_density: Field | None = None
     tolerance: float = 1.0e-8
     max_iterations: int = 10_000
     initial_potential: float = 0.0
@@ -53,8 +59,15 @@ class Simulation:
     def __post_init__(self) -> None:
         """Validate the simulation definition."""
 
+        if not isinstance(self.device, Device):
+            raise TypeError(
+                "Simulation device must be a Device instance."
+            )
+
         if not self.name.strip():
-            raise ValueError("Simulation name must not be empty.")
+            raise ValueError(
+                "Simulation name must not be empty."
+            )
 
         if not self.boundary_conditions:
             raise ValueError(
@@ -62,16 +75,22 @@ class Simulation:
             )
 
         if not np.isfinite(self.tolerance):
-            raise ValueError("Simulation tolerance must be finite.")
+            raise ValueError(
+                "Simulation tolerance must be finite."
+            )
 
         if self.tolerance <= 0.0:
-            raise ValueError("Simulation tolerance must be positive.")
+            raise ValueError(
+                "Simulation tolerance must be positive."
+            )
 
         if isinstance(self.max_iterations, bool) or not isinstance(
             self.max_iterations,
             int,
         ):
-            raise TypeError("Maximum iteration count must be an integer.")
+            raise TypeError(
+                "Maximum iteration count must be an integer."
+            )
 
         if self.max_iterations <= 0:
             raise ValueError(
@@ -79,10 +98,13 @@ class Simulation:
             )
 
         if not np.isfinite(self.initial_potential):
-            raise ValueError("Initial potential must be finite.")
+            raise ValueError(
+                "Initial potential must be finite."
+            )
 
         boundary_names = [
-            boundary.name for boundary in self.boundary_conditions
+            boundary.name
+            for boundary in self.boundary_conditions
         ]
 
         if len(boundary_names) != len(set(boundary_names)):
@@ -97,6 +119,7 @@ class Simulation:
                     "the device grid."
                 )
 
+        self._validate_charge_density()
         self._validate_overlapping_boundary_conditions()
 
         object.__setattr__(
@@ -104,6 +127,27 @@ class Simulation:
             "initial_potential",
             float(self.initial_potential),
         )
+
+    def _validate_charge_density(self) -> None:
+        """Validate the optional prescribed charge-density field."""
+
+        if self.charge_density is None:
+            return
+
+        if not isinstance(self.charge_density, Field):
+            raise TypeError(
+                "Charge density must be a Field instance or None."
+            )
+
+        if self.charge_density.grid != self.device.grid:
+            raise ValueError(
+                "Charge-density field does not use the device grid."
+            )
+
+        if self.charge_density.units != "C/m^3":
+            raise ValueError(
+                "Charge-density field units must be 'C/m^3'."
+            )
 
     def _validate_overlapping_boundary_conditions(self) -> None:
         """
@@ -132,7 +176,9 @@ class Simulation:
                 )
 
                 if not (same_type and same_units and same_value):
-                    overlap_count = int(np.count_nonzero(overlap))
+                    overlap_count = int(
+                        np.count_nonzero(overlap)
+                    )
 
                     raise ValueError(
                         f"Boundary conditions '{first.name}' and "
@@ -151,6 +197,12 @@ class Simulation:
         """Return the number of boundary-condition definitions."""
 
         return len(self.boundary_conditions)
+
+    @property
+    def has_charge_density(self) -> bool:
+        """Return whether a charge-density field was supplied."""
+
+        return self.charge_density is not None
 
     @property
     def dirichlet_boundaries(
@@ -223,10 +275,24 @@ class Simulation:
             values=values,
         )
 
+    def create_charge_density_field(self) -> Field:
+        """
+        Return the prescribed charge-density field.
+
+        If no field was supplied, return an immutable zero-valued field.
+        """
+
+        if self.charge_density is not None:
+            return self.charge_density
+
+        return Field.zeros(
+            name="charge_density",
+            units="C/m^3",
+            grid=self.grid,
+        )
+
     def create_fixed_potential_mask(self) -> np.ndarray:
-        """
-        Return a Boolean mask selecting all Dirichlet boundary points.
-        """
+        """Return a Boolean mask selecting all Dirichlet points."""
 
         fixed_mask = np.zeros(
             self.grid.shape,

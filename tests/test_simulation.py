@@ -10,6 +10,7 @@ from deviceforge import (
     Simulation,
 )
 from deviceforge.physics import SILICON
+from deviceforge.core import Field
 
 
 @pytest.fixture
@@ -450,4 +451,116 @@ def test_empty_boundary_collection_raises_value_error(
         Simulation(
             device=device_2d,
             boundary_conditions=(),
+        )
+
+# added additional tests here
+
+def test_simulation_defaults_to_zero_charge_density(
+    device_2d: Device,
+    left_boundary: BoundaryCondition,
+) -> None:
+    simulation = Simulation(
+        device=device_2d,
+        boundary_conditions=(left_boundary,),
+    )
+
+    assert simulation.charge_density is None
+    assert not simulation.has_charge_density
+
+    charge_density = simulation.create_charge_density_field()
+
+    assert charge_density.name == "charge_density"
+    assert charge_density.units == "C/m^3"
+    assert charge_density.grid is device_2d.grid
+
+    np.testing.assert_allclose(
+        charge_density.values,
+        0.0,
+    )
+
+
+def test_simulation_accepts_charge_density(
+    device_2d: Device,
+    left_boundary: BoundaryCondition,
+) -> None:
+    charge_density = Field.full(
+        name="charge_density",
+        units="C/m^3",
+        grid=device_2d.grid,
+        fill_value=1.0e5,
+    )
+
+    simulation = Simulation(
+        device=device_2d,
+        boundary_conditions=(left_boundary,),
+        charge_density=charge_density,
+    )
+
+    assert simulation.has_charge_density
+    assert simulation.charge_density is charge_density
+    assert (
+        simulation.create_charge_density_field()
+        is charge_density
+    )
+
+
+def test_charge_density_must_be_field(
+    device_2d: Device,
+    left_boundary: BoundaryCondition,
+) -> None:
+    with pytest.raises(
+        TypeError,
+        match="Charge density must be a Field",
+    ):
+        Simulation(
+            device=device_2d,
+            boundary_conditions=(left_boundary,),
+            charge_density="invalid",
+        )
+
+
+def test_charge_density_must_use_device_grid(
+    device_2d: Device,
+    left_boundary: BoundaryCondition,
+) -> None:
+    other_grid = Grid(
+        shape=(7, 4),
+        spacing=(1.0e-9, 1.0e-9),
+    )
+
+    charge_density = Field.zeros(
+        name="charge_density",
+        units="C/m^3",
+        grid=other_grid,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="does not use the device grid",
+    ):
+        Simulation(
+            device=device_2d,
+            boundary_conditions=(left_boundary,),
+            charge_density=charge_density,
+        )
+
+
+def test_charge_density_requires_correct_units(
+    device_2d: Device,
+    left_boundary: BoundaryCondition,
+) -> None:
+    charge_density = Field.zeros(
+        name="charge_density",
+        units="1/m^3",
+        grid=device_2d.grid,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="C/m\\^3",
+    ):
+        Simulation(
+            device=device_2d,
+            boundary_conditions=(left_boundary,),
+            charge_density=charge_density,
         )

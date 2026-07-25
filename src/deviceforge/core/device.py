@@ -8,6 +8,8 @@ from .field import Field
 from .grid import Grid
 from .region import Region
 
+# from deviceforge.physics.materials import SILICON
+# from deviceforge.physics.materials import SILICON_DIOXIDE
 
 @dataclass(frozen=True, slots=True)
 class Device:
@@ -136,6 +138,25 @@ class Device:
             units="dimensionless",
             grid=self.grid,
             values=values,
+        )
+
+    # additional permitttivity field
+
+    def permittivity_field(self) -> Field:
+        """Return absolute electric permittivity across the device."""
+
+        vacuum_permittivity = 8.8541878128e-12
+
+        relative = self.relative_permittivity_field()
+
+        return Field(
+            name="permittivity",
+            units="F/m",
+            grid=self.grid,
+            values=(
+                    vacuum_permittivity
+                    * relative.values
+            ),
         )
 
     def donor_density_field(self) -> Field:
