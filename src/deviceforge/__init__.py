@@ -20,4 +20,6 @@ __all__ = [
     "SimulationResult",
 ]
 
+from deviceforge.workflows import ElectrostaticWorkflow
+
 __version__ = "0.1.0"
