@@ -10,7 +10,7 @@ from deviceforge import (
     Region,
     Simulation,
 )
-from deviceforge.physics import SILICON
+from deviceforge.physics import SILICON, SILICON_DIOXIDE
 
 
 @pytest.fixture
@@ -161,6 +161,105 @@ def simulation(
         device=device,
         boundary_conditions=boundary_conditions,
         tolerance=1.0e-8,
+        max_iterations=500,
+        initial_potential=0.0,
+    )
+
+# one-dimensional silicon-dioxide/silicon dielectric stack
+
+@pytest.fixture
+def dielectric_stack_simulation() -> Simulation:
+    """
+    Return a one-dimensional silicon-dioxide/silicon dielectric stack.
+
+    The left endpoint is fixed at 0 V and the right endpoint at 1 V.
+    The device is charge-free and contains one material interface.
+    """
+
+    number_of_points = 101
+
+    grid = Grid(
+        shape=(number_of_points,),
+        spacing=(1.0e-9,),
+    )
+
+    interface_index = number_of_points // 2
+
+    oxide_mask = np.zeros(
+        grid.shape,
+        dtype=bool,
+    )
+    oxide_mask[:interface_index] = True
+
+    silicon_mask = np.zeros(
+        grid.shape,
+        dtype=bool,
+    )
+    silicon_mask[interface_index:] = True
+
+    oxide_region = Region(
+        name="silicon_dioxide",
+        grid=grid,
+        material=SILICON_DIOXIDE,
+        mask=oxide_mask,
+        region_type="dielectric",
+    )
+
+    silicon_region = Region(
+        name="silicon",
+        grid=grid,
+        material=SILICON,
+        mask=silicon_mask,
+        region_type="semiconductor",
+    )
+
+    device = Device(
+        name="dielectric_stack_device",
+        grid=grid,
+        regions=(
+            oxide_region,
+            silicon_region,
+        ),
+    )
+
+    left_mask = np.zeros(
+        grid.shape,
+        dtype=bool,
+    )
+    left_mask[0] = True
+
+    right_mask = np.zeros(
+        grid.shape,
+        dtype=bool,
+    )
+    right_mask[-1] = True
+
+    left_boundary = BoundaryCondition(
+        name="left_contact",
+        grid=grid,
+        mask=left_mask,
+        condition_type="dirichlet",
+        value=0.0,
+        units="V",
+    )
+
+    right_boundary = BoundaryCondition(
+        name="right_contact",
+        grid=grid,
+        mask=right_mask,
+        condition_type="dirichlet",
+        value=1.0,
+        units="V",
+    )
+
+    return Simulation(
+        name="dielectric_stack_simulation",
+        device=device,
+        boundary_conditions=(
+            left_boundary,
+            right_boundary,
+        ),
+        tolerance=1.0e-10,
         max_iterations=500,
         initial_potential=0.0,
     )

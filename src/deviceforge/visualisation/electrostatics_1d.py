@@ -9,6 +9,8 @@ from matplotlib.figure import Figure
 
 from ..core.field import Field
 from ..workflows import ElectrostaticWorkflowResult
+from ..core.face_field import FaceField
+
 
 
 def _validate_one_dimensional_field(
@@ -226,3 +228,102 @@ def _validate_workflow_output(
             "Electrostatic plotting requires an "
             "ElectrostaticWorkflowResult instance."
         )
+
+# update displacement visualisation
+# updated to return a cleaner figure.
+def plot_face_electric_displacement(
+    face_displacement: FaceField,
+) -> tuple[Figure, Axes]:
+    """
+    Plot conservative face-centred electric displacement.
+
+    Nearly constant fields are displayed with a sensible vertical range
+    rather than allowing Matplotlib to magnify floating-point roundoff.
+    """
+
+    if not isinstance(face_displacement, FaceField):
+        raise TypeError(
+            "Face-displacement plotting requires a FaceField."
+        )
+
+    if face_displacement.units != "C/m^2":
+        raise ValueError(
+            "Face displacement units must be 'C/m^2'."
+        )
+
+    coordinates_nm = (
+        face_displacement.coordinates()
+        * 1.0e9
+    )
+
+    values = np.asarray(
+        face_displacement.values,
+        dtype=np.float64,
+    )
+
+    mean_value = float(
+        np.mean(values)
+    )
+
+    value_spread = float(
+        np.ptp(values)
+    )
+
+    relative_spread = (
+        value_spread
+        / max(
+            abs(mean_value),
+            np.finfo(np.float64).tiny,
+        )
+    )
+
+    figure, axis = plt.subplots()
+
+    axis.plot(
+        coordinates_nm,
+        values,
+    )
+
+    axis.set_xlabel("Position (nm)")
+    axis.set_ylabel(
+        "Electric displacement (C/m²)"
+    )
+    axis.set_title(
+        "Face-Centred Electric Displacement"
+    )
+    axis.grid(True)
+
+    # Avoid magnifying machine-precision variation in an effectively
+    # constant conservative flux.
+    if relative_spread < 1.0e-10:
+        display_margin = max(
+            abs(mean_value) * 1.0e-3,
+            1.0e-12,
+        )
+
+        axis.set_ylim(
+            mean_value - display_margin,
+            mean_value + display_margin,
+        )
+
+        axis.ticklabel_format(
+            axis="y",
+            style="scientific",
+            scilimits=(-3, 3),
+            useOffset=False,
+        )
+
+        axis.text(
+            0.02,
+            0.95,
+            (
+                f"Mean D = {mean_value:.6e} C/m²\n"
+                f"Relative variation = {relative_spread:.3e}"
+            ),
+            transform=axis.transAxes,
+            verticalalignment="top",
+        )
+
+    figure.tight_layout()
+
+    return figure, axis

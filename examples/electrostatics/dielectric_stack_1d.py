@@ -26,6 +26,14 @@ from deviceforge.visualisation import (
 )
 from deviceforge.workflows import ElectrostaticWorkflow
 
+from deviceforge.postprocessing import (
+    calculate_face_electrostatic_fields,
+)
+from deviceforge.visualisation import (
+    plot_face_electric_displacement,
+)
+
+
 from pathlib import Path
 
 def create_dielectric_stack_simulation() -> Simulation:
@@ -209,15 +217,26 @@ def print_result_summary(
         f"{output.energy_density.maximum:.6e} J/m^3"
     )
 
-
+# updated with more robust checks
 def verify_dielectric_interface(
     workflow: ElectrostaticWorkflow,
 ) -> None:
     """
-    Print a simple displacement-continuity check.
+    Evaluate electric-flux continuity across the dielectric interface.
 
-    Values close to one indicate that the normal electric displacement is
-    approximately continuous across the material interface.
+    Two checks are reported:
+
+    1. Region-averaged node-centred epsilon_r * E, evaluated away from
+       the interface.
+
+    2. Conservative face-centred electric displacement,
+
+           D_(i+1/2) = epsilon_0 * epsilon_r_(i+1/2) * E_(i+1/2),
+
+       using harmonic face permittivity and potential differences.
+
+    The face-centred calculation matches the discretisation used by the
+    Poisson solver and should remain nearly constant across the stack.
     """
 
     output = workflow.output
@@ -227,56 +246,224 @@ def verify_dielectric_interface(
             "Workflow has not produced an output."
         )
 
-    number_of_points = (
-        workflow.simulation.grid.shape[0]
-    )
-    interface_index = number_of_points // 2
+    vacuum_permittivity = 8.8541878128e-12
 
-    displacement = (
-        output.electric_displacement.values
+    simulation = workflow.simulation
+    grid = simulation.grid
+
+    grid_spacing = grid.spacing[0]
+
+    relative_permittivity = (
+        simulation
+        .device
+        .relative_permittivity_field()
+        .values
     )
 
-    oxide_displacement = float(
+    potential = output.potential.values
+    node_electric_field = output.electric_field.values
+
+    # Locate material transitions automatically.
+    interface_faces = np.flatnonzero(
+        ~np.isclose(
+            relative_permittivity[:-1],
+            relative_permittivity[1:],
+        )
+    )
+
+    if interface_faces.size != 1:
+        raise RuntimeError(
+            "This example expects exactly one dielectric interface. "
+            f"Detected {interface_faces.size}."
+        )
+
+    interface_face = int(interface_faces[0])
+
+    # The material on the right begins at this node.
+    right_region_start = interface_face + 1
+
+    # Exclude several nodes around the interface so the centred
+    # derivative does not sample both material regions.
+    exclusion_width = 3
+
+    left_node_slice = slice(
+        1,
+        max(
+            2,
+            right_region_start - exclusion_width,
+        ),
+    )
+
+    right_node_slice = slice(
+        min(
+            grid.shape[0] - 1,
+            right_region_start + exclusion_width,
+        ),
+        grid.shape[0] - 1,
+    )
+
+    # --------------------------------------------------------------
+    # Node-centred epsilon_r E check
+    # --------------------------------------------------------------
+
+    relative_flux_nodes = (
+        relative_permittivity
+        * node_electric_field
+    )
+
+    left_relative_flux = float(
         np.mean(
-            displacement[
-                max(1, interface_index - 10):
-                interface_index - 2
-            ]
+            relative_flux_nodes[left_node_slice]
         )
     )
 
-    silicon_displacement = float(
+    right_relative_flux = float(
         np.mean(
-            displacement[
-                interface_index + 2:
-                min(
-                    number_of_points - 1,
-                    interface_index + 10,
-                )
-            ]
+            relative_flux_nodes[right_node_slice]
         )
     )
 
-    if silicon_displacement == 0.0:
-        displacement_ratio = np.inf
-    else:
-        displacement_ratio = (
-            oxide_displacement
-            / silicon_displacement
-        )
+    relative_flux_reference = max(
+        abs(left_relative_flux),
+        abs(right_relative_flux),
+        np.finfo(np.float64).tiny,
+    )
 
-    print("\nDielectric-interface check:")
+    relative_flux_mismatch = (
+        abs(
+            left_relative_flux
+            - right_relative_flux
+        )
+        / relative_flux_reference
+    )
+
+    # --------------------------------------------------------------
+    # Conservative face-centred displacement check
+    # --------------------------------------------------------------
+
+    left_permittivity = relative_permittivity[:-1]
+    right_permittivity = relative_permittivity[1:]
+
+    face_relative_permittivity = (
+        2.0
+        * left_permittivity
+        * right_permittivity
+        / (
+            left_permittivity
+            + right_permittivity
+        )
+    )
+
+    face_electric_field = -(
+        potential[1:]
+        - potential[:-1]
+    ) / grid_spacing
+
+    face_displacement = (
+        vacuum_permittivity
+        * face_relative_permittivity
+        * face_electric_field
+    )
+
+    # Faces wholly inside each region. The interface face itself is
+    # excluded from these regional averages.
+    left_face_slice = slice(
+        1,
+        interface_face,
+    )
+
+    right_face_slice = slice(
+        interface_face + 1,
+        face_displacement.size - 1,
+    )
+
+    left_displacement = float(
+        np.mean(
+            face_displacement[left_face_slice]
+        )
+    )
+
+    right_displacement = float(
+        np.mean(
+            face_displacement[right_face_slice]
+        )
+    )
+
+    interface_displacement = float(
+        face_displacement[interface_face]
+    )
+
+    displacement_reference = max(
+        abs(left_displacement),
+        abs(right_displacement),
+        np.finfo(np.float64).tiny,
+    )
+
+    displacement_mismatch = (
+        abs(
+            left_displacement
+            - right_displacement
+        )
+        / displacement_reference
+    )
+
+    maximum_face_deviation = float(
+        np.max(
+            np.abs(
+                face_displacement
+                - np.mean(face_displacement)
+            )
+        )
+    )
+
+    mean_face_displacement = float(
+        np.mean(face_displacement)
+    )
+
+    relative_maximum_face_deviation = (
+        maximum_face_deviation
+        / max(
+            abs(mean_face_displacement),
+            np.finfo(np.float64).tiny,
+        )
+    )
+
+    print("\nDielectric-interface flux verification:")
+
+    print("\n  Node-centred epsilon_r E, away from interface:")
     print(
-        "  Mean oxide displacement:   "
-        f"{oxide_displacement:.6e} C/m^2"
+        "    Oxide mean:                "
+        f"{left_relative_flux:.12e} V/m"
     )
     print(
-        "  Mean silicon displacement: "
-        f"{silicon_displacement:.6e} C/m^2"
+        "    Silicon mean:              "
+        f"{right_relative_flux:.12e} V/m"
     )
     print(
-        "  Oxide/silicon ratio:       "
-        f"{displacement_ratio:.6f}"
+        "    Relative regional mismatch:"
+        f" {relative_flux_mismatch:.12e}"
+    )
+
+    print("\n  Face-centred electric displacement:")
+    print(
+        "    Oxide mean:                "
+        f"{left_displacement:.12e} C/m^2"
+    )
+    print(
+        "    Interface face:            "
+        f"{interface_displacement:.12e} C/m^2"
+    )
+    print(
+        "    Silicon mean:              "
+        f"{right_displacement:.12e} C/m^2"
+    )
+    print(
+        "    Relative regional mismatch:"
+        f" {displacement_mismatch:.12e}"
+    )
+    print(
+        "    Maximum relative deviation:"
+        f" {relative_maximum_face_deviation:.12e}"
     )
 
 # output directory helper function
@@ -339,6 +526,15 @@ def create_figures(
         .relative_permittivity_field()
     )
 
+    (
+        face_electric_field,
+        face_relative_permittivity,
+        face_displacement,
+    ) = calculate_face_electrostatic_fields(
+        output.potential,
+        relative_permittivity,
+    )
+
     figures = (
         (
             "01_relative_permittivity.png",
@@ -360,9 +556,17 @@ def create_figures(
             )[0],
         ),
         (
-            "04_electric_displacement.png",
+            "04a_node_centred_electric_displacement.png",
             plot_electric_displacement(
                 output
+            )[0],
+        ),
+        (
+            # temporary added **
+            # ***
+            "04b_face_centred_electric_displacement.png",
+            plot_face_electric_displacement(
+                face_displacement
             )[0],
         ),
         (

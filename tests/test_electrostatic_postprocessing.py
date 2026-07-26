@@ -20,6 +20,9 @@ from deviceforge.postprocessing import (
     calculate_electric_displacement_field,
     calculate_electric_field,
     calculate_electrostatic_energy_density,
+    calculate_face_electric_field,
+    calculate_face_electrostatic_fields,
+    calculate_face_relative_permittivity,
 )
 
 
@@ -938,4 +941,94 @@ def test_energy_density_from_linear_poisson_solution_is_uniform(
 
     assert np.all(
         energy_density.values > 0.0
+    )
+
+# additional tests for facefield
+
+def test_face_electric_field_from_linear_potential() -> None:
+    grid = Grid(
+        shape=(11,),
+        spacing=(1.0e-9,),
+    )
+
+    coordinates = grid.coordinates(0)
+    slope = 2.5e6
+
+    potential = Field(
+        name="electrostatic_potential",
+        units="V",
+        grid=grid,
+        values=slope * coordinates,
+    )
+
+    face_field = calculate_face_electric_field(
+        potential
+    )
+
+    np.testing.assert_allclose(
+        face_field.values,
+        -slope,
+        rtol=1.0e-12,
+        atol=1.0e-6,
+    )
+
+
+def test_face_permittivity_uses_harmonic_mean() -> None:
+    grid = Grid(
+        shape=(2,),
+        spacing=(1.0e-9,),
+    )
+
+    relative_permittivity = Field(
+        name="relative_permittivity",
+        units="dimensionless",
+        grid=grid,
+        values=[3.9, 11.7],
+    )
+
+    face_permittivity = (
+        calculate_face_relative_permittivity(
+            relative_permittivity
+        )
+    )
+
+    expected = (
+        2.0
+        * 3.9
+        * 11.7
+        / (3.9 + 11.7)
+    )
+
+    assert face_permittivity.values[0] == pytest.approx(
+        expected
+    )
+
+# updated
+def test_face_displacement_is_continuous_for_dielectric_stack(
+    dielectric_stack_simulation: Simulation,
+) -> None:
+    result = PoissonSolver().solve(
+        dielectric_stack_simulation
+    )
+
+    relative_permittivity = (
+        dielectric_stack_simulation
+        .device
+        .relative_permittivity_field()
+    )
+
+    (
+        _,
+        _,
+        face_displacement,
+    ) = calculate_face_electrostatic_fields(
+        result.potential,
+        relative_permittivity,
+    )
+
+    np.testing.assert_allclose(
+        face_displacement.values,
+        face_displacement.values[0],
+        rtol=1.0e-11,
+        atol=1.0e-15,
     )

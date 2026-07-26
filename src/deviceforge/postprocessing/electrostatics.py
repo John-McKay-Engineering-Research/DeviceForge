@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from ..core.field import Field
+from ..core.face_field import FaceField
 
 VACUUM_PERMITTIVITY = 8.8541878128e-12
 
@@ -246,4 +247,238 @@ def calculate_electrostatic_energy_density(
         units="J/m^3",
         grid=electric_field.grid,
         values=energy_density_values,
+    )
+
+# FaceField functions
+
+def calculate_face_electric_field(
+    potential: Field,
+) -> FaceField:
+    """
+    Calculate electric field between adjacent potential nodes.
+
+    The face-centred electric field is
+
+        E_(i+1/2) = -(phi_(i+1) - phi_i) / dx.
+
+    Parameters
+    ----------
+    potential:
+        One-dimensional electrostatic-potential field in volts.
+
+    Returns
+    -------
+    FaceField
+        Electric field at grid faces in volts per metre.
+    """
+
+    if not isinstance(potential, Field):
+        raise TypeError(
+            "Face electric-field calculation requires "
+            "a Field instance."
+        )
+
+    if potential.grid.dimension != 1:
+        raise ValueError(
+            "Face electric-field calculation currently "
+            "supports only one-dimensional fields."
+        )
+
+    if potential.units != "V":
+        raise ValueError(
+            "Potential field units must be 'V'."
+        )
+
+    spacing = potential.grid.spacing[0]
+
+    values = -np.diff(
+        potential.values
+    ) / spacing
+
+    return FaceField(
+        name="face_electric_field",
+        units="V/m",
+        grid=potential.grid,
+        values=values,
+    )
+
+
+def calculate_face_relative_permittivity(
+    relative_permittivity: Field,
+) -> FaceField:
+    """
+    Calculate harmonic face-centred relative permittivity.
+
+    For adjacent node values epsilon_i and epsilon_(i+1),
+
+        epsilon_(i+1/2)
+            = 2 epsilon_i epsilon_(i+1)
+              / (epsilon_i + epsilon_(i+1)).
+    """
+
+    if not isinstance(relative_permittivity, Field):
+        raise TypeError(
+            "Face-permittivity calculation requires "
+            "a Field instance."
+        )
+
+    if relative_permittivity.grid.dimension != 1:
+        raise ValueError(
+            "Face-permittivity calculation currently "
+            "supports only one-dimensional fields."
+        )
+
+    if relative_permittivity.units != "dimensionless":
+        raise ValueError(
+            "Relative permittivity units must be "
+            "'dimensionless'."
+        )
+
+    values = relative_permittivity.values
+
+    if np.any(values <= 0.0):
+        raise ValueError(
+            "Relative permittivity values must be positive."
+        )
+
+    face_values = (
+        2.0
+        * values[:-1]
+        * values[1:]
+        / (
+            values[:-1]
+            + values[1:]
+        )
+    )
+
+    return FaceField(
+        name="face_relative_permittivity",
+        units="dimensionless",
+        grid=relative_permittivity.grid,
+        values=face_values,
+    )
+
+
+def calculate_face_electric_displacement(
+    face_electric_field: FaceField,
+    face_relative_permittivity: FaceField,
+) -> FaceField:
+    """
+    Calculate conservative face-centred electric displacement.
+
+    The displacement is
+
+        D_(i+1/2)
+            = epsilon_0
+              * epsilon_r_(i+1/2)
+              * E_(i+1/2).
+    """
+
+    if not isinstance(
+        face_electric_field,
+        FaceField,
+    ):
+        raise TypeError(
+            "Face electric displacement requires a "
+            "FaceField electric field."
+        )
+
+    if not isinstance(
+        face_relative_permittivity,
+        FaceField,
+    ):
+        raise TypeError(
+            "Face electric displacement requires a "
+            "FaceField relative permittivity."
+        )
+
+    if face_electric_field.units != "V/m":
+        raise ValueError(
+            "Face electric-field units must be 'V/m'."
+        )
+
+    if (
+        face_relative_permittivity.units
+        != "dimensionless"
+    ):
+        raise ValueError(
+            "Face relative-permittivity units must be "
+            "'dimensionless'."
+        )
+
+    if (
+        face_electric_field.grid
+        != face_relative_permittivity.grid
+    ):
+        raise ValueError(
+            "Face electric field and face permittivity "
+            "must use the same grid."
+        )
+
+    if np.any(
+        face_relative_permittivity.values <= 0.0
+    ):
+        raise ValueError(
+            "Face relative-permittivity values "
+            "must be positive."
+        )
+
+    values = (
+        VACUUM_PERMITTIVITY
+        * face_relative_permittivity.values
+        * face_electric_field.values
+    )
+
+    return FaceField(
+        name="face_electric_displacement",
+        units="C/m^2",
+        grid=face_electric_field.grid,
+        values=values,
+    )
+
+# convenience pipeline functions for FaceField
+
+def calculate_face_electrostatic_fields(
+    potential: Field,
+    relative_permittivity: Field,
+) -> tuple[FaceField, FaceField, FaceField]:
+    """
+    Calculate the standard face-centred electrostatic fields.
+
+    Returns
+    -------
+    tuple[FaceField, FaceField, FaceField]
+        Face electric field, face relative permittivity, and face electric
+        displacement.
+    """
+
+    if potential.grid != relative_permittivity.grid:
+        raise ValueError(
+            "Potential and relative permittivity must use "
+            "the same grid."
+        )
+
+    face_electric_field = (
+        calculate_face_electric_field(
+            potential
+        )
+    )
+
+    face_relative_permittivity = (
+        calculate_face_relative_permittivity(
+            relative_permittivity
+        )
+    )
+
+    face_electric_displacement = (
+        calculate_face_electric_displacement(
+            face_electric_field,
+            face_relative_permittivity,
+        )
+    )
+
+    return (
+        face_electric_field,
+        face_relative_permittivity,
+        face_electric_displacement,
     )

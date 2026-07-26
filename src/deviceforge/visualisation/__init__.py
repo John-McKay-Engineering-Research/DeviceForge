@@ -12,6 +12,7 @@ from .electrostatics_1d import (
     plot_electrostatic_potential,
     plot_relative_permittivity,
     plot_residual_history,
+    plot_face_electric_displacement,
 )
 
 __all__ = [
@@ -25,4 +26,5 @@ __all__ = [
     "plot_electrostatic_potential",
     "plot_relative_permittivity",
     "plot_residual_history",
+    "plot_face_electric_displacement"
 ]

@@ -5,6 +5,7 @@ from .grid import Grid
 from .region import Region
 from .result import SimulationResult
 from .simulation import Simulation
+from .face_field import FaceField
 
 __all__ = [
     "BoundaryCondition",
@@ -15,4 +16,5 @@ __all__ = [
     "Region",
     "Simulation",
     "SimulationResult",
+    "FaceField",
 ]
