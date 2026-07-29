@@ -10,6 +10,13 @@ from scipy.sparse.linalg import cg
 from .linear_system import LinearSystem
 from .result import LinearSolveResult
 
+from dataclasses import dataclass, field
+
+from .preconditioners import(
+    IdentityPreconditioner,
+    PreconditionerProtocol,
+)
+
 
 @dataclass(frozen=True, slots=True)
 class ConjugateGradientSolver:
@@ -53,12 +60,27 @@ class ConjugateGradientSolver:
     absolute_tolerance: float = 0.0
     max_iterations: int | None = None
     initial_guess: ArrayLike | None = None
+
+    preconditioner: PreconditionerProtocol = field(
+        default_factory=IdentityPreconditioner
+    )
+
     name: str = "conjugate_gradient"
     backend_name: str = "scipy"
 
     def __post_init__(self) -> None:
         """Validate and normalise solver configuration."""
 
+        # validate the pre-conditioner ***
+        if not isinstance(
+                self.preconditioner,
+                PreconditionerProtocol,
+        ):
+            raise TypeError(
+                "ConjugateGradientSolver preconditioner must "
+                "satisfy PreconditionerProtocol."
+            )
+        # ***
         if isinstance(
             self.relative_tolerance,
             bool,
@@ -218,7 +240,19 @@ class ConjugateGradientSolver:
         initial_guess = self._create_initial_guess(
             system
         )
-
+        # build the pre-conditioner ***
+        try:
+            preconditioner_operator = (
+                self.preconditioner.build(
+                    system
+                )
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                "Conjugate-gradient preconditioner could not "
+                "be constructed."
+            ) from exc
+        # ***
         residual_history: list[float] = []
 
         def record_iteration(
@@ -245,6 +279,7 @@ class ConjugateGradientSolver:
                 rtol=self.relative_tolerance,
                 atol=self.absolute_tolerance,
                 maxiter=self.max_iterations,
+                M=preconditioner_operator, # update scipy call
                 callback=record_iteration,
             )
         except Exception as exc:
@@ -338,6 +373,13 @@ class ConjugateGradientSolver:
             ),
             "residual_norm": "infinity",
             "scipy_convergence_norm": "euclidean",
+            # additional meta-data for pre-conditioner
+            "preconditioner": (
+                self.preconditioner.name
+            ),
+            "preconditioner_backend": (
+                self.preconditioner.backend_name
+            ),
         }
 
         return LinearSolveResult(

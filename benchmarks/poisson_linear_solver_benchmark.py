@@ -18,6 +18,9 @@ from deviceforge.linalg import (
     ConjugateGradientSolver,
     DenseDirectSolver,
     SparseDirectSolver,
+    IdentityPreconditioner,
+    JacobiPreconditioner,
+
 )
 from deviceforge.physics import SILICON
 from deviceforge.solvers import PoissonSolver
@@ -222,13 +225,22 @@ def run_benchmarks() -> tuple[BenchmarkRecord, ...]:
         simulation = create_benchmark_simulation(
             number_of_points
         )
-
+        # updated linear solvers
         linear_solvers = [
             SparseDirectSolver(),
             ConjugateGradientSolver(
+                preconditioner=IdentityPreconditioner(),
                 relative_tolerance=1.0e-10,
                 absolute_tolerance=1.0e-12,
                 max_iterations=100_000,
+                name="cg_identity",
+            ),
+            ConjugateGradientSolver(
+                preconditioner=JacobiPreconditioner(),
+                relative_tolerance=1.0e-10,
+                absolute_tolerance=1.0e-12,
+                max_iterations=100_000,
+                name="cg_jacobi",
             ),
         ]
 
@@ -346,33 +358,39 @@ def plot_runtime_scaling(
 
     return output_path
 
-
+# now plots both conjugate gradients
 def plot_cg_iterations(
     records: tuple[BenchmarkRecord, ...],
     output_directory: Path,
 ) -> Path:
     """Plot CG iteration count against grid size."""
 
-    cg_records = [
-        record
-        for record in records
-        if record.linear_solver
-        == "conjugate_gradient"
-    ]
-
     figure, axis = plt.subplots()
 
-    axis.plot(
-        [
-            record.grid_points
-            for record in cg_records
-        ],
-        [
-            record.iterations
-            for record in cg_records
-        ],
-        marker="o",
+    cg_solver_names = (
+        "cg_identity",
+        "cg_jacobi",
     )
+
+    for solver_name in cg_solver_names:
+        selected_records = [
+            record
+            for record in records
+            if record.linear_solver == solver_name
+        ]
+
+        axis.plot(
+            [
+                record.grid_points
+                for record in selected_records
+            ],
+            [
+                record.iterations
+                for record in selected_records
+            ],
+            marker="o",
+            label=solver_name,
+        )
 
     axis.set_xlabel("Grid points")
     axis.set_ylabel("CG iterations")
@@ -380,6 +398,7 @@ def plot_cg_iterations(
         "Conjugate-Gradient Iteration Scaling"
     )
     axis.grid(True)
+    axis.legend()
 
     figure.tight_layout()
 

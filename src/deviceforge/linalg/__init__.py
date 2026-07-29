@@ -12,6 +12,12 @@ from .conjugate_gradient_solver import (
     ConjugateGradientSolver,
 )
 
+from .preconditioners import (
+    IdentityPreconditioner,
+    JacobiPreconditioner,
+    PreconditionerProtocol,
+)
+
 __all__ = [
     "DenseMatrix",
     "LinearSolverProtocol",
@@ -21,4 +27,7 @@ __all__ = [
     "DenseDirectSolver",
     "LinearSolveResult",
     "conjugate_gradient_solver",
+    "IdentityPreconditioner",
+    "JacobiPreconditioner",
+    "PreconditionerProtocol",
 ]

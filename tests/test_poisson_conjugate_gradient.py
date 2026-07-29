@@ -14,6 +14,12 @@ from deviceforge.postprocessing import (
 )
 from deviceforge.solvers import PoissonSolver
 
+from deviceforge.linalg import (
+    ConjugateGradientSolver,
+    JacobiPreconditioner,
+    SparseDirectSolver,
+)
+
 
 def solve_with_direct_and_cg(
     simulation: Simulation,
@@ -217,3 +223,41 @@ def test_cg_and_direct_endpoint_values_match(
         direct_result.potential.values[-1],
         abs=1.0e-12,
     )
+
+# Poisson-level Jacobi Integration
+
+def test_jacobi_cg_matches_direct_for_dielectric_stack(
+    dielectric_stack_simulation: Simulation,
+) -> None:
+    direct_result = PoissonSolver(
+        linear_solver=SparseDirectSolver(),
+    ).solve(
+        dielectric_stack_simulation
+    )
+
+    jacobi_result = PoissonSolver(
+        linear_solver=ConjugateGradientSolver(
+            preconditioner=JacobiPreconditioner(),
+            relative_tolerance=1.0e-12,
+            absolute_tolerance=1.0e-14,
+            max_iterations=10_000,
+        ),
+        name="poisson_jacobi_cg_1d",
+    ).solve(
+        dielectric_stack_simulation
+    )
+
+    np.testing.assert_allclose(
+        jacobi_result.potential.values,
+        direct_result.potential.values,
+        rtol=1.0e-10,
+        atol=1.0e-12,
+    )
+
+    assert jacobi_result.converged
+
+    assert jacobi_result.metadata[
+        "linear_solver_metadata"
+    ][
+        "preconditioner"
+    ] == "jacobi"
