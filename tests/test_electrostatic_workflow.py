@@ -10,6 +10,10 @@ from deviceforge.workflows import (
     ElectrostaticWorkflowResult,
 )
 
+from deviceforge.linalg import (
+    ConjugateGradientSolver,
+)
+
 
 def test_workflow_stores_simulation_and_solver(
     simulation,
@@ -417,3 +421,32 @@ def test_workflow_repr_contains_status(
     assert "test_workflow" in representation
     assert "PoissonSolver" in representation
     assert "has_output=False" in representation
+
+# Conjugate tests
+
+def test_workflow_runs_with_conjugate_gradient(
+    dielectric_stack_simulation,
+) -> None:
+    workflow = ElectrostaticWorkflow(
+        simulation=dielectric_stack_simulation,
+        solver=PoissonSolver(
+            linear_solver=ConjugateGradientSolver(
+                relative_tolerance=1.0e-12,
+                absolute_tolerance=1.0e-14,
+                max_iterations=10_000,
+            ),
+            name="poisson_cg_1d",
+        ),
+    )
+
+    output = workflow.run()
+
+    assert output.converged
+    assert output.iterations > 0
+    assert output.residual_history.size == (
+        output.iterations
+    )
+
+    assert output.simulation_result.metadata[
+        "linear_solver"
+    ] == "conjugate_gradient"

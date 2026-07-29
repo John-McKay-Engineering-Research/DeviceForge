@@ -18,6 +18,9 @@ from deviceforge.core import Field
 from deviceforge import Device, Grid, Region
 from deviceforge.physics import SILICON, SILICON_DIOXIDE
 
+from scipy.sparse import csr_matrix
+from deviceforge.linalg import LinearSystem
+
 def create_linear_simulation(
     simulation: Simulation,
     *,
@@ -291,8 +294,12 @@ def test_poisson_solver_records_metadata(
         linear_simulation
     )
 
-    assert result.solver_name == "poisson_direct_1d"
-    assert result.backend_name == "numpy"
+    # assert result.solver_name == "poisson_direct_1d"
+    # assert result.backend_name == "numpy"#
+
+    # sparse matrix addtions
+    assert result.solver_name == "poisson_sparse_1d"
+    assert result.backend_name == "scipy"
 
     assert result.metadata["equation"] == "laplace"
     assert result.metadata["spatial_dimension"] == 1
@@ -311,10 +318,43 @@ def test_poisson_solver_records_metadata(
                "relative_permittivity_max"
            ] == pytest.approx(11.7)
 
+    # assert result.metadata["linear_solver"] == (
+        # "numpy.linalg.solve"
+    # )
+
+    # sparse matrix tests ***
     assert result.metadata["linear_solver"] == (
-        "numpy.linalg.solve"
+        "sparse_direct"
     )
 
+    assert result.metadata[
+               "linear_solver_backend"
+           ] == "scipy"
+
+    assert result.metadata[
+        "matrix_storage"
+    ] == "csr"
+
+    assert result.metadata[
+        "linear_solver_converged"
+    ] is True
+
+    assert result.metadata[
+        "linear_solver_iterations"
+    ] == 1
+
+    assert result.metadata[
+        "linear_solver_final_residual"
+    ] is not None
+
+    assert result.metadata[
+        "linear_solver_termination_reason"
+    ] == "direct_solve_completed"
+
+    assert isinstance(
+        result.metadata["linear_solver_metadata"],
+        dict,
+    )
     assert result.metadata["charge_density_present"] is False
     assert (
             result.metadata["charge_density_min_c_per_m3"]
@@ -715,3 +755,88 @@ def test_poisson_solver_preserves_dielectric_flux_at_interface() -> None:
             rel=1.0e-11,
         )
     )
+
+# sparse matrix tests
+
+def test_poisson_solver_assembles_sparse_system(
+    simulation,
+) -> None:
+    solver = PoissonSolver()
+
+    system = solver._assemble_system(
+        simulation
+    )
+
+    assert isinstance(
+        system,
+        LinearSystem,
+    )
+
+    assert system.is_sparse
+    assert isinstance(
+        system.matrix,
+        csr_matrix,
+    )
+
+    assert system.shape == (
+        simulation.grid.number_of_points,
+        simulation.grid.number_of_points,
+    )
+
+
+def test_sparse_poisson_system_is_tridiagonal(
+    simulation,
+) -> None:
+    system = PoissonSolver()._assemble_system(
+        simulation
+    )
+
+    rows, columns = system.matrix.nonzero()
+
+    assert np.all(
+        np.abs(rows - columns) <= 1
+    )
+
+# additional tests
+
+def test_poisson_matrix_is_symmetric(
+    dielectric_stack_simulation,
+) -> None:
+    system = PoissonSolver()._assemble_system(
+        dielectric_stack_simulation
+    )
+
+    difference = (
+        system.matrix
+        - system.matrix.T
+    )
+
+    np.testing.assert_allclose(
+        difference.toarray(),
+        0.0,
+        atol=1.0e-14,
+    )
+
+def test_poisson_matrix_has_positive_diagonal(
+    dielectric_stack_simulation,
+) -> None:
+    system = PoissonSolver()._assemble_system(
+        dielectric_stack_simulation
+    )
+
+    assert np.all(
+        system.matrix.diagonal() > 0.0
+    )
+
+def test_poisson_matrix_is_positive_definite(
+    dielectric_stack_simulation,
+) -> None:
+    system = PoissonSolver()._assemble_system(
+        dielectric_stack_simulation
+    )
+
+    eigenvalues = np.linalg.eigvalsh(
+        system.matrix.toarray()
+    )
+
+    assert np.all(eigenvalues > 0.0)
