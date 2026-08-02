@@ -166,16 +166,34 @@ class Simulation:
                 if not np.any(overlap):
                     continue
 
-                same_type = first.condition_type is second.condition_type
-                same_units = first.units == second.units
-                same_value = np.isclose(
-                    first.value,
-                    second.value,
+                same_type = (
+                    first.condition_type
+                    is second.condition_type
+                )
+                same_units = (
+                    first.units
+                    == second.units
+                )
+
+                first_values = first.values_at(
+                    overlap
+                )
+                second_values = second.values_at(
+                    overlap
+                )
+
+                same_values = np.allclose(
+                    first_values,
+                    second_values,
                     rtol=1.0e-12,
                     atol=1.0e-15,
                 )
 
-                if not (same_type and same_units and same_value):
+                if not (
+                    same_type
+                    and same_units
+                    and same_values
+                ):
                     overlap_count = int(
                         np.count_nonzero(overlap)
                     )
@@ -264,9 +282,10 @@ class Simulation:
             self.initial_potential,
             dtype=np.float64,
         )
-
         for boundary in self.dirichlet_boundaries:
-            values[boundary.mask] = boundary.value
+            values[boundary.mask] = (
+                boundary.values_on_mask()
+            )
 
         return Field(
             name="electrostatic_potential",

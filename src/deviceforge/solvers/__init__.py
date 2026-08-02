@@ -8,6 +8,7 @@ from .tridiagonal import solve_tridiagonal
 from .gummel_1d import GummelDriftDiffusionSolver1D
 from .protocol import SolverProtocol
 from .poisson_solver import PoissonSolver
+from .poisson_solver_2d import PoissonSolver2D
 
 __all__ = [
     "BaseSolver",
@@ -21,6 +22,7 @@ __all__ = [
     "GummelDriftDiffusionSolver1D",
     "SolverProtocol",
     "poisson_solver",
+    "PoissonSolver2D"
 ]
 
 

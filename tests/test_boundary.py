@@ -339,3 +339,145 @@ def test_out_of_bounds_index_raises_index_error(
 
     with pytest.raises(IndexError, match="outside"):
         boundary.contains_index(index)
+
+
+# additional boundary tests
+
+def test_boundary_accepts_spatial_value_array(
+    grid_2d,
+) -> None:
+    mask = np.zeros(
+        grid_2d.shape,
+        dtype=np.bool_,
+    )
+    mask[:, -1] = True
+
+    values = np.zeros(
+        grid_2d.shape,
+        dtype=np.float64,
+    )
+    values[:, -1] = np.linspace(
+        0.0,
+        1.0,
+        grid_2d.shape[0],
+    )
+
+    boundary = BoundaryCondition(
+        name="top_profile",
+        grid=grid_2d,
+        mask=mask,
+        condition_type="dirichlet",
+        value=values,
+        units="V",
+    )
+
+    assert boundary.is_spatially_varying
+
+    np.testing.assert_allclose(
+        boundary.values_on_mask(),
+        values[mask],
+    )
+
+def test_boundary_rejects_spatial_value_shape_mismatch(
+    grid_2d,
+) -> None:
+    mask = np.zeros(
+        grid_2d.shape,
+        dtype=np.bool_,
+    )
+    mask[:, -1] = True
+
+    with pytest.raises(
+        ValueError,
+        match="same shape",
+    ):
+        BoundaryCondition(
+            name="invalid_profile",
+            grid=grid_2d,
+            mask=mask,
+            condition_type="dirichlet",
+            value=np.zeros((3, 3)),
+            units="V",
+        )
+
+
+def test_boundary_rejects_non_finite_spatial_values(
+    grid_2d,
+) -> None:
+    mask = np.zeros(
+        grid_2d.shape,
+        dtype=np.bool_,
+    )
+    mask[:, -1] = True
+
+    values = np.zeros(
+        grid_2d.shape,
+        dtype=np.float64,
+    )
+    values[0, -1] = np.nan
+
+    with pytest.raises(
+        ValueError,
+        match="NaN or infinite",
+    ):
+        BoundaryCondition(
+            name="invalid_profile",
+            grid=grid_2d,
+            mask=mask,
+            condition_type="dirichlet",
+            value=values,
+            units="V",
+        )
+
+def test_spatial_boundary_values_are_immutable(
+    grid_2d,
+) -> None:
+    mask = np.zeros(
+        grid_2d.shape,
+        dtype=np.bool_,
+    )
+    mask[:, -1] = True
+
+    values = np.zeros(
+        grid_2d.shape,
+        dtype=np.float64,
+    )
+
+    boundary = BoundaryCondition(
+        name="top_profile",
+        grid=grid_2d,
+        mask=mask,
+        condition_type="dirichlet",
+        value=values,
+        units="V",
+    )
+
+    with pytest.raises(ValueError):
+        boundary.value[0, -1] = 1.0
+
+def test_scalar_values_on_mask_repeat_scalar(
+    grid_2d,
+) -> None:
+    mask = np.zeros(
+        grid_2d.shape,
+        dtype=np.bool_,
+    )
+    mask[0, :] = True
+
+    boundary = BoundaryCondition(
+        name="left_contact",
+        grid=grid_2d,
+        mask=mask,
+        condition_type="dirichlet",
+        value=0.25,
+        units="V",
+    )
+
+    np.testing.assert_allclose(
+        boundary.values_on_mask(),
+        0.25,
+    )
+
+    assert boundary.values_on_mask().shape == (
+        boundary.number_of_points,
+    )

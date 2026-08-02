@@ -394,9 +394,14 @@ class PoissonSolver:
             simulation.grid.shape,
             dtype=np.float64,
         )
+        # updated
+        # for boundary in simulation.dirichlet_boundaries:
+            # boundary_values[boundary.mask] = boundary.value
 
         for boundary in simulation.dirichlet_boundaries:
-            boundary_values[boundary.mask] = boundary.value
+            boundary_values[boundary.mask] = (
+                boundary.values_on_mask()
+            )
 
         charge_density = (
             simulation
