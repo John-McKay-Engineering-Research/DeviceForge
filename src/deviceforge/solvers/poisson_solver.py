@@ -580,6 +580,10 @@ class PoissonSolver:
                         face_permittivity[0]
                     )
 
+                    left_boundary_permittivity = (
+                        relative_permittivity[0]
+                    )
+
                     matrix[0, 0] = (
                         left_face_permittivity
                     )
@@ -589,9 +593,15 @@ class PoissonSolver:
                     )
 
                     right_hand_side[0] = (
-                            left_face_permittivity
+                            left_boundary_permittivity
                             * neumann_value
                             * grid_spacing
+                            + charge_density[0]
+                            * grid_spacing ** 2
+                            / (
+                                    2.0
+                                    * VACUUM_PERMITTIVITY
+                            )
                     )
 
                 elif grid_index == (
@@ -599,6 +609,10 @@ class PoissonSolver:
                 ):
                     right_face_permittivity = (
                         face_permittivity[-1]
+                    )
+
+                    right_boundary_permittivity = (
+                        relative_permittivity[-1]
                     )
 
                     matrix[-1, -2] = (
@@ -610,9 +624,15 @@ class PoissonSolver:
                     )
 
                     right_hand_side[-1] = (
-                            right_face_permittivity
+                            right_boundary_permittivity
                             * neumann_value
                             * grid_spacing
+                            + charge_density[-1]
+                            * grid_spacing ** 2
+                            / (
+                                    2.0
+                                    * VACUUM_PERMITTIVITY
+                            )
                     )
 
                 else:

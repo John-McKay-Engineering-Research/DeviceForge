@@ -22,6 +22,8 @@ from scipy.sparse import csr_matrix
 from deviceforge.linalg import LinearSystem
 from deviceforge.linalg import ConjugateGradientSolver
 
+VACUUM_PERMITTIVITY = 8.8541878128e-12
+
 def create_linear_simulation(
     simulation: Simulation,
     *,
@@ -139,6 +141,80 @@ def create_charged_simulation(
         max_iterations=500,
         initial_potential=0.0,
         name="uniform_charge_poisson_test",
+    )
+
+def create_charged_mixed_boundary_simulation(
+    simulation: Simulation,
+    *,
+    charge_density: float,
+    left_condition_type: BoundaryConditionType,
+    left_value: float,
+    left_units: str,
+    right_condition_type: BoundaryConditionType,
+    right_value: float,
+    right_units: str,
+) -> Simulation:
+    """
+    Create a one-dimensional charged Poisson problem with independently
+    configured endpoint boundary conditions.
+    """
+
+    grid = simulation.grid
+
+    left_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+    left_mask[0] = True
+
+    right_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+    right_mask[-1] = True
+
+    left_boundary = BoundaryCondition(
+        name="left_boundary",
+        grid=grid,
+        mask=left_mask,
+        condition_type=left_condition_type,
+        value=left_value,
+        units=left_units,
+    )
+
+    right_boundary = BoundaryCondition(
+        name="right_boundary",
+        grid=grid,
+        mask=right_mask,
+        condition_type=right_condition_type,
+        value=right_value,
+        units=right_units,
+    )
+
+    charge_density_values = np.full(
+        grid.shape,
+        charge_density,
+        dtype=np.float64,
+    )
+
+    charge_density_field = Field(
+        name="charge_density",
+        units="C/m^3",
+        grid=grid,
+        values=charge_density_values,
+    )
+
+    return Simulation(
+        device=simulation.device,
+        boundary_conditions=(
+            left_boundary,
+            right_boundary,
+        ),
+        charge_density=charge_density_field,
+        tolerance=1.0e-8,
+        max_iterations=500,
+        initial_potential=0.0,
+        name="charged_mixed_boundary_poisson_test",
     )
 
 def expected_linear_potential_from_slope(
@@ -1439,4 +1515,349 @@ def test_poisson_solver_supports_left_neumann_right_dirichlet_with_cg(
         expected,
         rtol=1.0e-10,
         atol=1.0e-12,
+    )
+
+def expected_uniform_charge_potential(
+    simulation: Simulation,
+    *,
+    reference_potential: float,
+    right_neumann_value: float,
+    charge_density: float,
+    relative_permittivity: float,
+) -> np.ndarray:
+    """
+    Return the analytical potential for a uniform-charge problem with
+
+        phi(0) = reference_potential
+
+    and
+
+        dphi/dn = right_neumann_value
+
+    at the right boundary.
+    """
+
+    coordinates = (
+        simulation.grid.coordinates(0)
+    )
+
+    domain_length = (
+        coordinates[-1]
+        - coordinates[0]
+    )
+
+    local_coordinates = (
+        coordinates
+        - coordinates[0]
+    )
+
+    curvature = (
+        charge_density
+        / (
+            VACUUM_PERMITTIVITY
+            * relative_permittivity
+        )
+    )
+
+    linear_coefficient = (
+        right_neumann_value
+        + curvature * domain_length
+    )
+
+    return (
+        reference_potential
+        + linear_coefficient
+        * local_coordinates
+        - 0.5
+        * curvature
+        * local_coordinates**2
+    )
+
+def test_poisson_solver_matches_uniform_charge_solution_with_right_neumann(
+    simulation,
+) -> None:
+    charge_density = 1.0e5
+
+    left_potential = 0.25
+    right_neumann_value = 2.0e6
+
+    mixed_simulation = (
+        create_charged_mixed_boundary_simulation(
+            simulation,
+            charge_density=charge_density,
+            left_condition_type=(
+                BoundaryConditionType.DIRICHLET
+            ),
+            left_value=left_potential,
+            left_units="V",
+            right_condition_type=(
+                BoundaryConditionType.NEUMANN
+            ),
+            right_value=right_neumann_value,
+            right_units="V/m",
+        )
+    )
+
+    relative_permittivity = float(
+        mixed_simulation
+        .device
+        .relative_permittivity_field()
+        .values[0]
+    )
+
+    expected = (
+        expected_uniform_charge_potential(
+            mixed_simulation,
+            reference_potential=left_potential,
+            right_neumann_value=right_neumann_value,
+            charge_density=charge_density,
+            relative_permittivity=relative_permittivity,
+        )
+    )
+
+    result = PoissonSolver().solve(
+        mixed_simulation
+    )
+
+    assert result.converged
+
+    np.testing.assert_allclose(
+        result.potential.values,
+        expected,
+        rtol=1.0e-10,
+        atol=1.0e-12,
+    )
+
+def expected_uniform_charge_potential_left_neumann(
+    simulation: Simulation,
+    *,
+    reference_potential: float,
+    left_neumann_value: float,
+    charge_density: float,
+    relative_permittivity: float,
+) -> np.ndarray:
+    """
+    Return the analytical potential for a uniform-charge problem with
+
+        dphi/dn = left_neumann_value
+
+    at the left boundary and
+
+        phi(L) = reference_potential
+
+    at the right boundary.
+    """
+
+    coordinates = (
+        simulation.grid.coordinates(0)
+    )
+
+    left_position = coordinates[0]
+    right_position = coordinates[-1]
+
+    local_coordinates = (
+        coordinates
+        - left_position
+    )
+
+    domain_length = (
+        right_position
+        - left_position
+    )
+
+    curvature = (
+        charge_density
+        / (
+            VACUUM_PERMITTIVITY
+            * relative_permittivity
+        )
+    )
+
+    return (
+        reference_potential
+        + left_neumann_value
+        * (
+            domain_length
+            - local_coordinates
+        )
+        + 0.5
+        * curvature
+        * (
+            domain_length**2
+            - local_coordinates**2
+        )
+    )
+
+def test_poisson_solver_matches_uniform_charge_solution_with_left_neumann(
+    simulation,
+) -> None:
+    charge_density = 1.0e5
+
+    left_neumann_value = -2.0e6
+    right_potential = 0.25
+
+    mixed_simulation = (
+        create_charged_mixed_boundary_simulation(
+            simulation,
+            charge_density=charge_density,
+            left_condition_type=(
+                BoundaryConditionType.NEUMANN
+            ),
+            left_value=left_neumann_value,
+            left_units="V/m",
+            right_condition_type=(
+                BoundaryConditionType.DIRICHLET
+            ),
+            right_value=right_potential,
+            right_units="V",
+        )
+    )
+
+    relative_permittivity = float(
+        mixed_simulation
+        .device
+        .relative_permittivity_field()
+        .values[0]
+    )
+
+    expected = (
+        expected_uniform_charge_potential_left_neumann(
+            mixed_simulation,
+            reference_potential=right_potential,
+            left_neumann_value=left_neumann_value,
+            charge_density=charge_density,
+            relative_permittivity=relative_permittivity,
+        )
+    )
+
+    result = PoissonSolver().solve(
+        mixed_simulation
+    )
+
+    assert result.converged
+
+    np.testing.assert_allclose(
+        result.potential.values,
+        expected,
+        rtol=1.0e-10,
+        atol=1.0e-12,
+    )
+
+def test_poisson_solver_matches_uniform_charge_solution_with_right_neumann_cg(
+    simulation,
+) -> None:
+    charge_density = 1.0e5
+
+    left_potential = 0.25
+    right_neumann_value = 2.0e6
+
+    mixed_simulation = (
+        create_charged_mixed_boundary_simulation(
+            simulation,
+            charge_density=charge_density,
+            left_condition_type=(
+                BoundaryConditionType.DIRICHLET
+            ),
+            left_value=left_potential,
+            left_units="V",
+            right_condition_type=(
+                BoundaryConditionType.NEUMANN
+            ),
+            right_value=right_neumann_value,
+            right_units="V/m",
+        )
+    )
+
+    relative_permittivity = float(
+        mixed_simulation
+        .device
+        .relative_permittivity_field()
+        .values[0]
+    )
+
+    expected = (
+        expected_uniform_charge_potential(
+            mixed_simulation,
+            reference_potential=left_potential,
+            right_neumann_value=right_neumann_value,
+            charge_density=charge_density,
+            relative_permittivity=relative_permittivity,
+        )
+    )
+
+    solver = PoissonSolver(
+        linear_solver=ConjugateGradientSolver()
+    )
+
+    result = solver.solve(
+        mixed_simulation
+    )
+
+    assert result.converged
+
+    np.testing.assert_allclose(
+        result.potential.values,
+        expected,
+        rtol=1.0e-9,
+        atol=1.0e-11,
+    )
+
+
+def test_poisson_solver_matches_uniform_charge_solution_with_left_neumann_cg(
+    simulation,
+) -> None:
+    charge_density = 1.0e5
+
+    left_neumann_value = -2.0e6
+    right_potential = 0.25
+
+    mixed_simulation = (
+        create_charged_mixed_boundary_simulation(
+            simulation,
+            charge_density=charge_density,
+            left_condition_type=(
+                BoundaryConditionType.NEUMANN
+            ),
+            left_value=left_neumann_value,
+            left_units="V/m",
+            right_condition_type=(
+                BoundaryConditionType.DIRICHLET
+            ),
+            right_value=right_potential,
+            right_units="V",
+        )
+    )
+
+    relative_permittivity = float(
+        mixed_simulation
+        .device
+        .relative_permittivity_field()
+        .values[0]
+    )
+
+    expected = (
+        expected_uniform_charge_potential_left_neumann(
+            mixed_simulation,
+            reference_potential=right_potential,
+            left_neumann_value=left_neumann_value,
+            charge_density=charge_density,
+            relative_permittivity=relative_permittivity,
+        )
+    )
+
+    solver = PoissonSolver(
+        linear_solver=ConjugateGradientSolver()
+    )
+
+    result = solver.solve(
+        mixed_simulation
+    )
+
+    assert result.converged
+
+    np.testing.assert_allclose(
+        result.potential.values,
+        expected,
+        rtol=1.0e-9,
+        atol=1.0e-11,
     )
