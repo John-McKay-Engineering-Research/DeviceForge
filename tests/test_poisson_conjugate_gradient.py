@@ -5,10 +5,7 @@ import pytest
 
 from deviceforge.core.field import Field
 from deviceforge.core.simulation import Simulation
-from deviceforge.linalg import (
-    ConjugateGradientSolver,
-    SparseDirectSolver,
-)
+
 from deviceforge.postprocessing import (
     calculate_face_electrostatic_fields,
 )

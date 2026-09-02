@@ -1032,3 +1032,68 @@ def test_face_displacement_is_continuous_for_dielectric_stack(
         rtol=1.0e-11,
         atol=1.0e-15,
     )
+
+def test_quadratic_potential_produces_exact_field_at_endpoints() -> None:
+    grid = Grid(
+        shape=(11,),
+        spacing=(0.1,),
+    )
+
+    coordinates = grid.coordinates(0)
+
+    potential_values = (
+        2.0 * coordinates**2
+        + 3.0 * coordinates
+        + 1.0
+    )
+
+    potential = Field(
+        name="electrostatic_potential",
+        units="V",
+        grid=grid,
+        values=potential_values,
+    )
+
+    electric_field = calculate_electric_field(
+        potential
+    )
+
+    expected = -(
+        4.0 * coordinates
+        + 3.0
+    )
+
+    np.testing.assert_allclose(
+        electric_field.values,
+        expected,
+        rtol=1.0e-12,
+        atol=1.0e-12,
+    )
+
+def test_three_point_grid_uses_second_order_endpoint_differences() -> None:
+    grid = Grid(
+        shape=(3,),
+        spacing=(0.5,),
+    )
+
+    coordinates = grid.coordinates(0)
+
+    potential = Field(
+        name="electrostatic_potential",
+        units="V",
+        grid=grid,
+        values=coordinates**2,
+    )
+
+    electric_field = calculate_electric_field(
+        potential
+    )
+
+    expected = -2.0 * coordinates
+
+    np.testing.assert_allclose(
+        electric_field.values,
+        expected,
+        rtol=1.0e-12,
+        atol=1.0e-12,
+    )

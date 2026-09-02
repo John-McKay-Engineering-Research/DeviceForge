@@ -26,7 +26,7 @@ __all__ = [
     "SparseDirectSolver",
     "DenseDirectSolver",
     "LinearSolveResult",
-    "conjugate_gradient_solver",
+    "ConjugateGradientSolver",
     "IdentityPreconditioner",
     "JacobiPreconditioner",
     "PreconditionerProtocol",

@@ -20,6 +20,7 @@ from deviceforge.physics import SILICON, SILICON_DIOXIDE
 
 from scipy.sparse import csr_matrix
 from deviceforge.linalg import LinearSystem
+from deviceforge.linalg import ConjugateGradientSolver
 
 def create_linear_simulation(
     simulation: Simulation,
@@ -138,6 +139,91 @@ def create_charged_simulation(
         max_iterations=500,
         initial_potential=0.0,
         name="uniform_charge_poisson_test",
+    )
+
+def expected_linear_potential_from_slope(
+    simulation: Simulation,
+    *,
+    reference_position: float,
+    reference_potential: float,
+    slope: float,
+) -> np.ndarray:
+    """
+    Return the analytical linear potential
+
+        phi(x) = phi_ref + slope * (x - x_ref).
+    """
+
+    coordinates = (
+        simulation.grid.coordinates(0)
+    )
+
+    return (
+        reference_potential
+        + slope
+        * (
+            coordinates
+            - reference_position
+        )
+    )
+
+def create_mixed_boundary_simulation(
+    simulation: Simulation,
+    *,
+    left_condition_type: BoundaryConditionType,
+    left_value: float,
+    left_units: str,
+    right_condition_type: BoundaryConditionType,
+    right_value: float,
+    right_units: str,
+) -> Simulation:
+    """
+    Create a one-dimensional Poisson problem with independently
+    configured endpoint boundary conditions.
+    """
+
+    grid = simulation.grid
+
+    left_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+    left_mask[0] = True
+
+    right_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+    right_mask[-1] = True
+
+    left_boundary = BoundaryCondition(
+        name="left_boundary",
+        grid=grid,
+        mask=left_mask,
+        condition_type=left_condition_type,
+        value=left_value,
+        units=left_units,
+    )
+
+    right_boundary = BoundaryCondition(
+        name="right_boundary",
+        grid=grid,
+        mask=right_mask,
+        condition_type=right_condition_type,
+        value=right_value,
+        units=right_units,
+    )
+
+    return Simulation(
+        device=simulation.device,
+        boundary_conditions=(
+            left_boundary,
+            right_boundary,
+        ),
+        tolerance=1.0e-8,
+        max_iterations=500,
+        initial_potential=0.0,
+        name="mixed_boundary_poisson_test",
     )
 
 def test_poisson_solver_satisfies_solver_protocol() -> None:
@@ -438,6 +524,7 @@ def test_positive_charge_produces_positive_internal_potential(
     assert result.potential.values[-1] == pytest.approx(0.0)
     assert np.all(result.potential.values[1:-1] > 0.0)
 
+"""
 def test_poisson_solver_rejects_neumann_boundary(
     simulation,
 ) -> None:
@@ -494,7 +581,57 @@ def test_poisson_solver_rejects_neumann_boundary(
         solver.solve(
             neumann_simulation
         )
+"""
 
+def test_poisson_solver_supports_left_dirichlet_right_neumann(
+    simulation,
+) -> None:
+    left_potential = 0.25
+    slope = 2.0e6
+
+    mixed_simulation = (
+        create_mixed_boundary_simulation(
+            simulation,
+            left_condition_type=(
+                BoundaryConditionType.DIRICHLET
+            ),
+            left_value=left_potential,
+            left_units="V",
+            right_condition_type=(
+                BoundaryConditionType.NEUMANN
+            ),
+            right_value=slope,
+            right_units="V/m",
+        )
+    )
+
+    result = PoissonSolver().solve(
+        mixed_simulation
+    )
+
+    coordinates = (
+        mixed_simulation
+        .grid
+        .coordinates(0)
+    )
+
+    expected = (
+        expected_linear_potential_from_slope(
+            mixed_simulation,
+            reference_position=coordinates[0],
+            reference_potential=left_potential,
+            slope=slope,
+        )
+    )
+
+    assert result.converged
+
+    np.testing.assert_allclose(
+        result.potential.values,
+        expected,
+        rtol=1.0e-11,
+        atol=1.0e-12,
+    )
 
 def test_poisson_solver_requires_left_endpoint_condition(
     simulation,
@@ -840,3 +977,466 @@ def test_poisson_matrix_is_positive_definite(
     )
 
     assert np.all(eigenvalues > 0.0)
+
+
+def test_poisson_solver_supports_left_neumann_right_dirichlet(
+    simulation,
+) -> None:
+    right_potential = 1.25
+    slope = 2.0e6
+
+    mixed_simulation = (
+        create_mixed_boundary_simulation(
+            simulation,
+            left_condition_type=(
+                BoundaryConditionType.NEUMANN
+            ),
+            left_value=-slope,
+            left_units="V/m",
+            right_condition_type=(
+                BoundaryConditionType.DIRICHLET
+            ),
+            right_value=right_potential,
+            right_units="V",
+        )
+    )
+
+    coordinates = (
+        mixed_simulation
+        .grid
+        .coordinates(0)
+    )
+
+    expected = (
+        expected_linear_potential_from_slope(
+            mixed_simulation,
+            reference_position=coordinates[-1],
+            reference_potential=right_potential,
+            slope=slope,
+        )
+    )
+
+    result = PoissonSolver().solve(
+        mixed_simulation
+    )
+
+    assert result.converged
+
+    np.testing.assert_allclose(
+        result.potential.values,
+        expected,
+        rtol=1.0e-11,
+        atol=1.0e-12,
+    )
+
+def test_left_neumann_uses_outward_normal_sign(
+    simulation,
+) -> None:
+    outward_derivative = 3.0e6
+
+    mixed_simulation = (
+        create_mixed_boundary_simulation(
+            simulation,
+            left_condition_type=(
+                BoundaryConditionType.NEUMANN
+            ),
+            left_value=outward_derivative,
+            left_units="V/m",
+            right_condition_type=(
+                BoundaryConditionType.DIRICHLET
+            ),
+            right_value=0.0,
+            right_units="V",
+        )
+    )
+
+    result = PoissonSolver().solve(
+        mixed_simulation
+    )
+
+    spacing = (
+        mixed_simulation.grid.spacing[0]
+    )
+
+    numerical_slope = (
+        result.potential.values[1]
+        - result.potential.values[0]
+    ) / spacing
+
+    assert numerical_slope == pytest.approx(
+        -outward_derivative,
+        rel=1.0e-11,
+        abs=1.0e-6,
+    )
+
+def test_right_neumann_uses_outward_normal_sign(
+    simulation,
+) -> None:
+    outward_derivative = 3.0e6
+
+    mixed_simulation = (
+        create_mixed_boundary_simulation(
+            simulation,
+            left_condition_type=(
+                BoundaryConditionType.DIRICHLET
+            ),
+            left_value=0.0,
+            left_units="V",
+            right_condition_type=(
+                BoundaryConditionType.NEUMANN
+            ),
+            right_value=outward_derivative,
+            right_units="V/m",
+        )
+    )
+
+    result = PoissonSolver().solve(
+        mixed_simulation
+    )
+
+    spacing = (
+        mixed_simulation.grid.spacing[0]
+    )
+
+    numerical_slope = (
+        result.potential.values[-1]
+        - result.potential.values[-2]
+    ) / spacing
+
+    assert numerical_slope == pytest.approx(
+        outward_derivative,
+        rel=1.0e-11,
+        abs=1.0e-6,
+    )
+
+def test_poisson_solver_rejects_pure_neumann_problem(
+    simulation,
+) -> None:
+    pure_neumann_simulation = (
+        create_mixed_boundary_simulation(
+            simulation,
+            left_condition_type=(
+                BoundaryConditionType.NEUMANN
+            ),
+            left_value=0.0,
+            left_units="V/m",
+            right_condition_type=(
+                BoundaryConditionType.NEUMANN
+            ),
+            right_value=0.0,
+            right_units="V/m",
+        )
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="pure Neumann",
+    ):
+        PoissonSolver().solve(
+            pure_neumann_simulation
+        )
+
+
+def test_poisson_solver_rejects_invalid_neumann_units(
+    simulation,
+) -> None:
+    invalid_simulation = (
+        create_mixed_boundary_simulation(
+            simulation,
+            left_condition_type=(
+                BoundaryConditionType.DIRICHLET
+            ),
+            left_value=0.0,
+            left_units="V",
+            right_condition_type=(
+                BoundaryConditionType.NEUMANN
+            ),
+            right_value=0.0,
+            right_units="V",
+        )
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Neumann.*V/m",
+    ):
+        PoissonSolver().solve(
+            invalid_simulation
+        )
+
+def test_poisson_solver_rejects_invalid_dirichlet_units(
+    simulation,
+) -> None:
+    invalid_simulation = (
+        create_mixed_boundary_simulation(
+            simulation,
+            left_condition_type=(
+                BoundaryConditionType.DIRICHLET
+            ),
+            left_value=0.0,
+            left_units="V/m",
+            right_condition_type=(
+                BoundaryConditionType.NEUMANN
+            ),
+            right_value=0.0,
+            right_units="V/m",
+        )
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Dirichlet.*V",
+    ):
+        PoissonSolver().solve(
+            invalid_simulation
+        )
+
+def test_mixed_left_dirichlet_right_neumann_matrix_is_symmetric(
+    simulation,
+) -> None:
+    mixed_simulation = (
+        create_mixed_boundary_simulation(
+            simulation,
+            left_condition_type=(
+                BoundaryConditionType.DIRICHLET
+            ),
+            left_value=0.0,
+            left_units="V",
+            right_condition_type=(
+                BoundaryConditionType.NEUMANN
+            ),
+            right_value=2.0e6,
+            right_units="V/m",
+        )
+    )
+
+    solver = PoissonSolver()
+
+    system = solver._assemble_system(
+        mixed_simulation
+    )
+
+    matrix = system.matrix.toarray()
+
+    np.testing.assert_allclose(
+        matrix,
+        matrix.T,
+        rtol=0.0,
+        atol=1.0e-14,
+    )
+
+
+def test_mixed_left_dirichlet_right_neumann_matrix_is_positive_definite(
+    simulation,
+) -> None:
+    mixed_simulation = (
+        create_mixed_boundary_simulation(
+            simulation,
+            left_condition_type=(
+                BoundaryConditionType.DIRICHLET
+            ),
+            left_value=0.0,
+            left_units="V",
+            right_condition_type=(
+                BoundaryConditionType.NEUMANN
+            ),
+            right_value=2.0e6,
+            right_units="V/m",
+        )
+    )
+
+    solver = PoissonSolver()
+
+    system = solver._assemble_system(
+        mixed_simulation
+    )
+
+    matrix = system.matrix.toarray()
+
+    eigenvalues = np.linalg.eigvalsh(
+        matrix
+    )
+
+    assert np.all(
+        eigenvalues > 0.0
+    )
+
+
+def test_mixed_left_neumann_right_dirichlet_matrix_is_symmetric(
+    simulation,
+) -> None:
+    mixed_simulation = (
+        create_mixed_boundary_simulation(
+            simulation,
+            left_condition_type=(
+                BoundaryConditionType.NEUMANN
+            ),
+            left_value=-2.0e6,
+            left_units="V/m",
+            right_condition_type=(
+                BoundaryConditionType.DIRICHLET
+            ),
+            right_value=1.0,
+            right_units="V",
+        )
+    )
+
+    solver = PoissonSolver()
+
+    system = solver._assemble_system(
+        mixed_simulation
+    )
+
+    matrix = system.matrix.toarray()
+
+    np.testing.assert_allclose(
+        matrix,
+        matrix.T,
+        rtol=0.0,
+        atol=1.0e-14,
+    )
+
+
+def test_mixed_left_neumann_right_dirichlet_matrix_is_positive_definite(
+    simulation,
+) -> None:
+    mixed_simulation = (
+        create_mixed_boundary_simulation(
+            simulation,
+            left_condition_type=(
+                BoundaryConditionType.NEUMANN
+            ),
+            left_value=-2.0e6,
+            left_units="V/m",
+            right_condition_type=(
+                BoundaryConditionType.DIRICHLET
+            ),
+            right_value=1.0,
+            right_units="V",
+        )
+    )
+
+    solver = PoissonSolver()
+
+    system = solver._assemble_system(
+        mixed_simulation
+    )
+
+    matrix = system.matrix.toarray()
+
+    eigenvalues = np.linalg.eigvalsh(
+        matrix
+    )
+
+    assert np.all(
+        eigenvalues > 0.0
+    )
+
+def test_poisson_solver_supports_left_dirichlet_right_neumann_with_cg(
+    simulation,
+) -> None:
+    left_potential = 0.25
+    slope = 2.0e6
+
+    mixed_simulation = (
+        create_mixed_boundary_simulation(
+            simulation,
+            left_condition_type=(
+                BoundaryConditionType.DIRICHLET
+            ),
+            left_value=left_potential,
+            left_units="V",
+            right_condition_type=(
+                BoundaryConditionType.NEUMANN
+            ),
+            right_value=slope,
+            right_units="V/m",
+        )
+    )
+
+    coordinates = (
+        mixed_simulation
+        .grid
+        .coordinates(0)
+    )
+
+    expected = (
+        expected_linear_potential_from_slope(
+            mixed_simulation,
+            reference_position=coordinates[0],
+            reference_potential=left_potential,
+            slope=slope,
+        )
+    )
+
+    solver = PoissonSolver(
+        linear_solver=ConjugateGradientSolver()
+    )
+
+    result = solver.solve(
+        mixed_simulation
+    )
+
+    assert result.converged
+
+    np.testing.assert_allclose(
+        result.potential.values,
+        expected,
+        rtol=1.0e-10,
+        atol=1.0e-12,
+    )
+
+
+def test_poisson_solver_supports_left_neumann_right_dirichlet_with_cg(
+    simulation,
+) -> None:
+    right_potential = 1.25
+    slope = 2.0e6
+
+    mixed_simulation = (
+        create_mixed_boundary_simulation(
+            simulation,
+            left_condition_type=(
+                BoundaryConditionType.NEUMANN
+            ),
+            left_value=-slope,
+            left_units="V/m",
+            right_condition_type=(
+                BoundaryConditionType.DIRICHLET
+            ),
+            right_value=right_potential,
+            right_units="V",
+        )
+    )
+
+    coordinates = (
+        mixed_simulation
+        .grid
+        .coordinates(0)
+    )
+
+    expected = (
+        expected_linear_potential_from_slope(
+            mixed_simulation,
+            reference_position=coordinates[-1],
+            reference_potential=right_potential,
+            slope=slope,
+        )
+    )
+
+    solver = PoissonSolver(
+        linear_solver=ConjugateGradientSolver()
+    )
+
+    result = solver.solve(
+        mixed_simulation
+    )
+
+    assert result.converged
+
+    np.testing.assert_allclose(
+        result.potential.values,
+        expected,
+        rtol=1.0e-10,
+        atol=1.0e-12,
+    )

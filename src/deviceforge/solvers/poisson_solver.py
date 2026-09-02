@@ -280,9 +280,20 @@ class PoissonSolver:
 
     @staticmethod
     def _validate_simulation(
-        simulation: Simulation,
+            simulation: Simulation,
     ) -> None:
-        """Validate that the simulation is supported."""
+        """
+        Validate that the simulation is supported.
+
+        Supported one-dimensional endpoint combinations are:
+
+            Dirichlet + Dirichlet
+            Dirichlet + Neumann
+            Neumann   + Dirichlet
+
+        Pure-Neumann problems are rejected because they do not define a unique
+        absolute electrostatic potential without an additional gauge condition.
+        """
 
         if simulation.grid.dimension != 1:
             raise ValueError(
@@ -290,43 +301,14 @@ class PoissonSolver:
                 "one-dimensional grids."
             )
 
-        if simulation.neumann_boundaries:
-            raise ValueError(
-                "PoissonSolver currently supports only "
-                "Dirichlet boundary conditions."
-            )
-
-        if not simulation.dirichlet_boundaries:
-            raise ValueError(
-                "PoissonSolver requires at least one "
-                "Dirichlet boundary condition."
-            )
-
         if (
-            not simulation
-            .device
-            .require_full_coverage
+                not simulation
+                        .device
+                        .require_full_coverage
         ):
             raise ValueError(
                 "PoissonSolver requires complete material "
                 "coverage of the device grid."
-            )
-
-        fixed_mask = (
-            simulation
-            .create_fixed_potential_mask()
-        )
-
-        if not fixed_mask[0]:
-            raise ValueError(
-                "The first grid point must have a "
-                "Dirichlet boundary condition."
-            )
-
-        if not fixed_mask[-1]:
-            raise ValueError(
-                "The final grid point must have a "
-                "Dirichlet boundary condition."
             )
 
         relative_permittivity = (
@@ -337,16 +319,113 @@ class PoissonSolver:
         )
 
         if np.any(
-            relative_permittivity <= 0.0
+                relative_permittivity <= 0.0
         ):
             raise ValueError(
                 "Every grid point must have positive "
                 "relative permittivity."
             )
 
+        dirichlet_boundaries = (
+            simulation.dirichlet_boundaries
+        )
+
+        neumann_boundaries = (
+            simulation.neumann_boundaries
+        )
+
+        if (
+                not dirichlet_boundaries
+                and neumann_boundaries
+        ):
+            raise ValueError(
+                "PoissonSolver does not currently support "
+                "pure Neumann problems because the absolute "
+                "potential is undefined without a gauge condition."
+            )
+
+        if not (
+                dirichlet_boundaries
+                or neumann_boundaries
+        ):
+            raise ValueError(
+                "PoissonSolver requires endpoint boundary "
+                "conditions."
+            )
+
+        for boundary in dirichlet_boundaries:
+            if boundary.units != "V":
+                raise ValueError(
+                    "Dirichlet boundary conditions used by "
+                    "PoissonSolver must use units of 'V'."
+                )
+
+        for boundary in neumann_boundaries:
+            if boundary.units != "V/m":
+                raise ValueError(
+                    "Neumann boundary conditions used by "
+                    "PoissonSolver must use units of 'V/m'."
+                )
+
+        left_is_dirichlet = any(
+            boundary.mask[0]
+            for boundary in dirichlet_boundaries
+        )
+
+        left_is_neumann = any(
+            boundary.mask[0]
+            for boundary in neumann_boundaries
+        )
+
+        right_is_dirichlet = any(
+            boundary.mask[-1]
+            for boundary in dirichlet_boundaries
+        )
+
+        right_is_neumann = any(
+            boundary.mask[-1]
+            for boundary in neumann_boundaries
+        )
+
+        if not (
+                left_is_dirichlet
+                or left_is_neumann
+        ):
+            raise ValueError(
+                "The first grid point must have a "
+                "Dirichlet or Neumann boundary condition."
+            )
+
+        if not (
+                right_is_dirichlet
+                or right_is_neumann
+        ):
+            raise ValueError(
+                "The final grid point must have a "
+                "Dirichlet or Neumann boundary condition."
+            )
+
+        if (
+                left_is_dirichlet
+                and left_is_neumann
+        ):
+            raise ValueError(
+                "The first grid point cannot have both "
+                "Dirichlet and Neumann boundary conditions."
+            )
+
+        if (
+                right_is_dirichlet
+                and right_is_neumann
+        ):
+            raise ValueError(
+                "The final grid point cannot have both "
+                "Dirichlet and Neumann boundary conditions."
+            )
+
     def _assemble_system(
-        self,
-        simulation: Simulation,
+            self,
+            simulation: Simulation,
     ) -> LinearSystem:
         """
         Assemble the conservative sparse finite-difference system.
@@ -367,9 +446,27 @@ class PoissonSolver:
         Face permittivities are harmonic means of neighbouring
         node-centred relative permittivities.
 
-        Dirichlet conditions are imposed using symmetric elimination so
-        that the final coefficient matrix remains symmetric positive
-        definite.
+        Neumann boundary conditions are interpreted as outward-normal
+        potential derivatives:
+
+            dphi/dn = g
+
+        which gives, in one dimension,
+
+            left boundary:
+                phi_0 - phi_1 = g_left * dx
+
+            right boundary:
+                phi_(N-1) - phi_(N-2) = g_right * dx
+
+        The Neumann rows are scaled by the adjacent face permittivity so
+        that their off-diagonal coefficients match the neighbouring
+        interior equations. This preserves symmetry of the mixed-boundary
+        system.
+
+        Dirichlet conditions are imposed afterwards using symmetric
+        elimination so that the final coefficient matrix remains symmetric
+        positive definite for supported mixed-boundary problems.
 
         The matrix is assembled in LIL format for efficient incremental
         assignment and converted to CSR before constructing LinearSystem.
@@ -388,15 +485,14 @@ class PoissonSolver:
             dtype=np.float64,
         )
 
-        fixed_mask = simulation.create_fixed_potential_mask()
+        fixed_mask = (
+            simulation.create_fixed_potential_mask()
+        )
 
         boundary_values = np.zeros(
             simulation.grid.shape,
             dtype=np.float64,
         )
-        # updated
-        # for boundary in simulation.dirichlet_boundaries:
-            # boundary_values[boundary.mask] = boundary.value
 
         for boundary in simulation.dirichlet_boundaries:
             boundary_values[boundary.mask] = (
@@ -416,34 +512,128 @@ class PoissonSolver:
             .values
         )
 
-        face_permittivity = self._harmonic_face_values(
-            relative_permittivity
+        face_permittivity = (
+            self._harmonic_face_values(
+                relative_permittivity
+            )
         )
 
-        for index in range(
-            1,
-            number_of_points - 1,
-        ):
-            left_permittivity = face_permittivity[index - 1]
-            right_permittivity = face_permittivity[index]
+        # ------------------------------------------------------------
+        # Interior Poisson equations
+        # ------------------------------------------------------------
 
-            matrix[index, index - 1] = -left_permittivity
-            matrix[index, index] = (
-                left_permittivity
-                + right_permittivity
+        for index in range(
+                1,
+                number_of_points - 1,
+        ):
+            left_permittivity = (
+                face_permittivity[index - 1]
             )
-            matrix[index, index + 1] = -right_permittivity
+
+            right_permittivity = (
+                face_permittivity[index]
+            )
+
+            matrix[index, index - 1] = (
+                -left_permittivity
+            )
+
+            matrix[index, index] = (
+                    left_permittivity
+                    + right_permittivity
+            )
+
+            matrix[index, index + 1] = (
+                -right_permittivity
+            )
 
             right_hand_side[index] = (
-                charge_density[index]
-                * grid_spacing**2
-                / VACUUM_PERMITTIVITY
+                    charge_density[index]
+                    * grid_spacing ** 2
+                    / VACUUM_PERMITTIVITY
             )
 
-        fixed_indices = np.flatnonzero(fixed_mask)
+        # ------------------------------------------------------------
+        # Neumann boundary equations
+        # ------------------------------------------------------------
+
+        for boundary in simulation.neumann_boundaries:
+            boundary_values_on_mask = (
+                boundary.values_on_mask()
+            )
+
+            boundary_indices = np.flatnonzero(
+                boundary.mask
+            )
+
+            for local_index, grid_index in enumerate(
+                    boundary_indices
+            ):
+                neumann_value = (
+                    boundary_values_on_mask[
+                        local_index
+                    ]
+                )
+
+                if grid_index == 0:
+                    left_face_permittivity = (
+                        face_permittivity[0]
+                    )
+
+                    matrix[0, 0] = (
+                        left_face_permittivity
+                    )
+
+                    matrix[0, 1] = (
+                        -left_face_permittivity
+                    )
+
+                    right_hand_side[0] = (
+                            left_face_permittivity
+                            * neumann_value
+                            * grid_spacing
+                    )
+
+                elif grid_index == (
+                        number_of_points - 1
+                ):
+                    right_face_permittivity = (
+                        face_permittivity[-1]
+                    )
+
+                    matrix[-1, -2] = (
+                        -right_face_permittivity
+                    )
+
+                    matrix[-1, -1] = (
+                        right_face_permittivity
+                    )
+
+                    right_hand_side[-1] = (
+                            right_face_permittivity
+                            * neumann_value
+                            * grid_spacing
+                    )
+
+                else:
+                    raise ValueError(
+                        "PoissonSolver supports Neumann "
+                        "boundary conditions only at the "
+                        "first or final grid point."
+                    )
+
+        # ------------------------------------------------------------
+        # Symmetric Dirichlet elimination
+        # ------------------------------------------------------------
+
+        fixed_indices = np.flatnonzero(
+            fixed_mask
+        )
 
         for fixed_index in fixed_indices:
-            fixed_value = boundary_values[fixed_index]
+            fixed_value = (
+                boundary_values[fixed_index]
+            )
 
             column = (
                 matrix[:, fixed_index]
@@ -451,13 +641,21 @@ class PoissonSolver:
                 .ravel()
             )
 
-            right_hand_side -= column * fixed_value
+            right_hand_side -= (
+                    column
+                    * fixed_value
+            )
 
             matrix[:, fixed_index] = 0.0
             matrix[fixed_index, :] = 0.0
-            matrix[fixed_index, fixed_index] = 1.0
+            matrix[
+                fixed_index,
+                fixed_index,
+            ] = 1.0
 
-            right_hand_side[fixed_index] = fixed_value
+            right_hand_side[
+                fixed_index
+            ] = fixed_value
 
         return LinearSystem(
             matrix=matrix.tocsr(),

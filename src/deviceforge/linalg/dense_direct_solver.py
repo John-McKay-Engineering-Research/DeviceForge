@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-from numpy.typing import NDArray
 
 from .linear_system import LinearSystem
 from .result import LinearSolveResult
@@ -96,8 +95,8 @@ class DenseDirectSolver:
 
         Returns
         -------
-        NDArray[np.float64]
-            One-dimensional finite solution vector.
+        LinearSolveResult
+            Numerical solution and direct-solver diagnostics.
 
         Raises
         ------

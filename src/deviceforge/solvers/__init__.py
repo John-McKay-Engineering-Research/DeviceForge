@@ -21,8 +21,8 @@ __all__ = [
     "solve_tridiagonal",
     "GummelDriftDiffusionSolver1D",
     "SolverProtocol",
-    "poisson_solver",
-    "PoissonSolver2D"
+    "PoissonSolver",
+    "PoissonSolver2D",
 ]
 
 

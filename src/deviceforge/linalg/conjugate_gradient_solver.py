@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
@@ -8,14 +8,11 @@ from numpy.typing import ArrayLike, NDArray
 from scipy.sparse.linalg import cg
 
 from .linear_system import LinearSystem
-from .result import LinearSolveResult
-
-from dataclasses import dataclass, field
-
-from .preconditioners import(
+from .preconditioners import (
     IdentityPreconditioner,
     PreconditionerProtocol,
 )
+from .result import LinearSolveResult
 
 
 @dataclass(frozen=True, slots=True)
@@ -240,7 +237,7 @@ class ConjugateGradientSolver:
         initial_guess = self._create_initial_guess(
             system
         )
-        # build the pre-conditioner ***
+
         try:
             preconditioner_operator = (
                 self.preconditioner.build(
@@ -252,7 +249,7 @@ class ConjugateGradientSolver:
                 "Conjugate-gradient preconditioner could not "
                 "be constructed."
             ) from exc
-        # ***
+
         residual_history: list[float] = []
 
         def record_iteration(

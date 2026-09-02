@@ -17,8 +17,10 @@ def calculate_electric_field(
 
         E = -d(phi)/dx
 
-    A centred finite difference is used at interior grid points. First-order
-    one-sided differences are used at the two domain endpoints.
+    A second-order centred finite difference is used at interior grid
+    points. Second-order one-sided differences are used at the two domain
+    endpoints when at least three grid points are available. A first-order
+    difference is used for a two-point grid.
 
     Parameters
     ----------
@@ -40,7 +42,10 @@ def calculate_electric_field(
         use volts as its units.
     """
 
-    if not isinstance(potential, Field):
+    if not isinstance(
+        potential,
+        Field,
+    ):
         raise TypeError(
             "Electric-field calculation requires a Field instance."
         )
@@ -57,25 +62,50 @@ def calculate_electric_field(
         )
 
     spacing = potential.grid.spacing[0]
-    values = potential.values
+
+    values = np.asarray(
+        potential.values,
+        dtype=np.float64,
+    )
 
     electric_field_values = np.empty_like(
         values,
         dtype=np.float64,
     )
 
-    electric_field_values[0] = -(
-        values[1] - values[0]
-    ) / spacing
+    if values.size == 2:
+        endpoint_field = -(
+            values[1]
+            - values[0]
+        ) / spacing
 
-    electric_field_values[-1] = -(
-        values[-1] - values[-2]
-    ) / spacing
+        electric_field_values[:] = (
+            endpoint_field
+        )
 
-    if values.size > 2:
+    else:
+        electric_field_values[0] = -(
+            -3.0 * values[0]
+            + 4.0 * values[1]
+            - values[2]
+        ) / (
+            2.0 * spacing
+        )
+
+        electric_field_values[-1] = -(
+            3.0 * values[-1]
+            - 4.0 * values[-2]
+            + values[-3]
+        ) / (
+            2.0 * spacing
+        )
+
         electric_field_values[1:-1] = -(
-            values[2:] - values[:-2]
-        ) / (2.0 * spacing)
+            values[2:]
+            - values[:-2]
+        ) / (
+            2.0 * spacing
+        )
 
     return Field(
         name="electric_field",
@@ -83,7 +113,6 @@ def calculate_electric_field(
         grid=potential.grid,
         values=electric_field_values,
     )
-
 # extend electrostatics
 
 def calculate_electric_displacement_field(

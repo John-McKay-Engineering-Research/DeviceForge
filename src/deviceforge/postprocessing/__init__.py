@@ -3,8 +3,6 @@ from .electric_field import (
     compute_electric_field,
 )
 
-from .electrostatics import calculate_electric_field
-
 from .electrostatics import (
     calculate_electric_displacement_field,
     calculate_electric_field,
