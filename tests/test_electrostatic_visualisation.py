@@ -10,16 +10,23 @@ import pytest
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
-from deviceforge.core import Field
+# from deviceforge.core import Field
+from deviceforge.core import (
+    FaceField,
+    Field,
+)
 from deviceforge.solvers import PoissonSolver
+
 from deviceforge.visualisation import (
     plot_electric_displacement,
     plot_electric_field,
     plot_electrostatic_energy_density,
     plot_electrostatic_potential,
+    plot_face_electric_displacement,
     plot_relative_permittivity,
     plot_residual_history,
 )
+
 from deviceforge.workflows import ElectrostaticWorkflow
 
 
@@ -203,3 +210,199 @@ def test_plot_functions_do_not_call_show(
 
     for figure in figures:
         plt.close(figure)
+
+
+def test_face_displacement_plot_returns_figure_and_axes(
+    workflow_output,
+) -> None:
+    grid = workflow_output.potential.grid
+
+    face_displacement = FaceField(
+        name="face_electric_displacement",
+        units="C/m^2",
+        grid=grid,
+        values=np.full(
+            grid.shape[0] - 1,
+            1.0e-3,
+            dtype=np.float64,
+        ),
+    )
+
+    figure, axis = (
+        plot_face_electric_displacement(
+            face_displacement
+        )
+    )
+
+    assert isinstance(
+        figure,
+        Figure,
+    )
+
+    assert isinstance(
+        axis,
+        Axes,
+    )
+
+    plt.close(
+        figure
+    )
+
+
+def test_face_displacement_plot_uses_face_coordinates(
+    workflow_output,
+) -> None:
+    grid = workflow_output.potential.grid
+
+    values = np.linspace(
+        1.0e-3,
+        2.0e-3,
+        grid.shape[0] - 1,
+        dtype=np.float64,
+    )
+
+    face_displacement = FaceField(
+        name="face_electric_displacement",
+        units="C/m^2",
+        grid=grid,
+        values=values,
+    )
+
+    figure, axis = (
+        plot_face_electric_displacement(
+            face_displacement
+        )
+    )
+
+    plotted_line = axis.lines[0]
+
+    expected_coordinates = (
+        face_displacement.coordinates()
+        * 1.0e9
+    )
+
+    np.testing.assert_allclose(
+        plotted_line.get_xdata(),
+        expected_coordinates,
+    )
+
+    np.testing.assert_allclose(
+        plotted_line.get_ydata(),
+        values,
+    )
+
+    assert axis.get_xlabel() == (
+        "Position (nm)"
+    )
+
+    assert axis.get_ylabel() == (
+        "Electric displacement (C/m²)"
+    )
+
+    assert axis.get_title() == (
+        "Face-Centred Electric Displacement"
+    )
+
+    plt.close(
+        figure
+    )
+
+
+def test_constant_face_displacement_uses_stable_vertical_range(
+    workflow_output,
+) -> None:
+    grid = workflow_output.potential.grid
+
+    constant_value = 2.5e-3
+
+    face_displacement = FaceField(
+        name="face_electric_displacement",
+        units="C/m^2",
+        grid=grid,
+        values=np.full(
+            grid.shape[0] - 1,
+            constant_value,
+            dtype=np.float64,
+        ),
+    )
+
+    figure, axis = (
+        plot_face_electric_displacement(
+            face_displacement
+        )
+    )
+
+    lower_limit, upper_limit = (
+        axis.get_ylim()
+    )
+
+    expected_margin = (
+        abs(constant_value)
+        * 1.0e-3
+    )
+
+    assert lower_limit == pytest.approx(
+        constant_value
+        - expected_margin
+    )
+
+    assert upper_limit == pytest.approx(
+        constant_value
+        + expected_margin
+    )
+
+    assert len(
+        axis.texts
+    ) == 1
+
+    annotation = (
+        axis.texts[0].get_text()
+    )
+
+    assert (
+        "Mean D"
+        in annotation
+    )
+
+    assert (
+        "Relative variation"
+        in annotation
+    )
+
+    plt.close(
+        figure
+    )
+
+
+def test_face_displacement_plot_rejects_invalid_units(
+    workflow_output,
+) -> None:
+    grid = workflow_output.potential.grid
+
+    invalid_face_field = FaceField(
+        name="invalid_face_field",
+        units="V/m",
+        grid=grid,
+        values=np.ones(
+            grid.shape[0] - 1,
+            dtype=np.float64,
+        ),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="C/m\\^2",
+    ):
+        plot_face_electric_displacement(
+            invalid_face_field
+        )
+
+
+def test_face_displacement_plot_rejects_non_face_field() -> None:
+    with pytest.raises(
+        TypeError,
+        match="FaceField",
+    ):
+        plot_face_electric_displacement(
+            "invalid"
+        )
