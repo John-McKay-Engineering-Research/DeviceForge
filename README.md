@@ -1,1293 +1,906 @@
 # DeviceForge
 
-------------------------------------------------------------------------
 ![DeviceForge](DeviceForge_Logo.png)
 
-Scientific Computing • Semiconductor Physics • Numerical Methods •
-High-Performance Computing • Machine Learning • Engineering Optimisation
+**Scientific Computing • Semiconductor Physics • Numerical Methods • High-Performance Computing • Machine Learning • Engineering Optimisation**
 
-------------------------------------------------------------------------
+---
 
-# Overview
+## Overview
 
-**DeviceForge** is an open-source **Technology Computer-Aided Design
-(TCAD)** framework for semiconductor device simulation. The project
-explores how modern semiconductor simulation software can be developed
-using transparent numerical methods, rigorous verification, and
-contemporary scientific software engineering practices.
+**DeviceForge** is an open-source **Technology Computer-Aided Design (TCAD)** research framework for semiconductor device simulation.
 
-The framework combines:
+The project explores how modern semiconductor simulation software can be developed using:
 
--   Semiconductor Physics
--   Numerical Analysis
--   Scientific Computing
--   High-Performance Computing
--   Software Engineering
--   Machine Learning
--   Engineering Optimisation
+- transparent numerical methods
+- rigorous verification
+- modular scientific software architecture
+- reproducible computational workflows
+- extensible solver interfaces
+- high-performance computing
+- machine-learning-assisted engineering optimisation
 
-Unlike many educational simulation projects, DeviceForge places equal
-emphasis on:
+DeviceForge is developed with a verification-first philosophy: numerical methods are implemented, tested, analytically verified where possible, and benchmarked before being treated as stable reference functionality.
 
--   Numerical correctness
--   Independent verification
--   Scientific reproducibility
--   Modular software architecture
--   Automated testing
--   Long-term extensibility
+The long-term objective is to build a modular research platform capable of progressing from verified electrostatics toward semiconductor transport, higher-dimensional device simulation, hardware acceleration, design optimisation, and interactive engineering workflows.
 
-The long-term vision is to develop DeviceForge into a modular research
-platform capable of supporting semiconductor transport simulation, GPU
-acceleration, machine-learning-assisted optimisation and interactive
-engineering workflows.
+---
 
-------------------------------------------------------------------------
+## Why DeviceForge?
 
-# Why DeviceForge?
+Commercial semiconductor TCAD tools provide extremely powerful simulation capability, but the underlying numerical implementation is often opaque to the user.
 
-Commercial semiconductor TCAD software provides exceptional simulation
-capability but often functions as a black box.
+DeviceForge investigates **how semiconductor simulation software is actually built**.
 
-DeviceForge investigates **how semiconductor simulators are built**
-using transparent numerical methods and modern software engineering.
+The project places equal emphasis on:
 
-The project serves four primary goals:
+- numerical correctness
+- scientific reproducibility
+- independent verification
+- software architecture
+- automated testing
+- transparent numerical methods
+- long-term extensibility
 
-## Scientific Computing
+DeviceForge is not intended to replace commercial TCAD software. Instead, it provides a focused environment for implementing, verifying, comparing, and extending selected numerical methods used in semiconductor simulation.
 
-Develop robust numerical algorithms for coupled nonlinear semiconductor
-equations.
+---
 
-## Engineering Software
+# Current Status
 
-Explore maintainable software architecture for long-term scientific
-computing.
-
-## Research
-
-Provide a flexible platform for semiconductor physics, optimisation and
-HPC research.
-
-## Education
-
-Create an accessible implementation of modern TCAD algorithms suitable
-for learning and experimentation.
-
-------------------------------------------------------------------------
-
-# Current Development Status
-
-> **Current Status**
+> **Current Development Checkpoint**
 >
-> DeviceForge includes validated electrostatic solvers together with a
-> verified one-dimensional self-consistent semiconductor
-> drift--diffusion solver.
+> DeviceForge currently contains a verified **one-dimensional electrostatic Poisson reference solver** together with an established **two-dimensional electrostatic solver architecture**.
 >
-> Current development is focused on voltage sweeps, current--voltage
-> characteristics, advanced semiconductor physics, two-dimensional
-> simulation, GPU acceleration and engineering optimisation.
+> The 1D implementation is being used as the numerical reference for completing and verifying the corresponding 2D formulation before higher-level semiconductor transport physics is introduced.
 
-------------------------------------------------------------------------
+The verified 1D reference solver currently supports:
 
-# Current Capabilities
+- Laplace and Poisson problems
+- prescribed volumetric charge density
+- spatially varying relative permittivity
+- heterogeneous material regions
+- conservative interface treatment
+- Dirichlet boundary conditions
+- mixed Dirichlet-Neumann boundary conditions
+- sparse matrix assembly
+- dense direct solution
+- sparse direct solution
+- Conjugate Gradient solution
+- supported preconditioning
+- node-centred electrostatic postprocessing
+- conservative face-centred postprocessing
+- analytical verification
+- manufactured-solution verification
+- measured second-order grid convergence
+- automated regression testing
+- electrostatic visualisation
 
-## Semiconductor Physics
+The 2D implementation has reached a controlled development checkpoint with conservative five-point assembly, harmonic face averaging, sparse matrix storage, symmetric Dirichlet treatment, analytical verification, and measured second-order convergence for smooth problems.
 
--   ✅ Structured finite-difference computational grids
--   ✅ Material framework
--   ✅ Region framework
--   ✅ Donor and acceptor doping
--   ✅ Dirichlet and Neumann boundary conditions
--   ✅ Laplace equation
--   ✅ Poisson equation
--   ✅ Nonlinear equilibrium semiconductor solver
--   ✅ Self-consistent Gummel drift--diffusion solver
--   ✅ Scharfetter--Gummel discretisation
--   ✅ Shockley--Read--Hall recombination
--   ✅ Electron continuity equation
--   ✅ Hole continuity equation
--   ✅ Electron, hole and total current density
-
-## Numerical Verification
-
--   ✅ Analytical benchmark comparison
--   ✅ Mesh convergence studies
--   ✅ Regression testing
--   ✅ Unit testing
--   ✅ Current conservation diagnostics
--   ✅ Continuity-equation diagnostics
--   ✅ Algebraic residual verification
--   ✅ Cross-validation between independent implementations
-
-## Software Engineering
-
--   ✅ Modular object-oriented architecture
--   ✅ Typed Python implementation
--   ✅ Backend-independent design
--   ✅ Automated testing framework
--   ✅ Verification framework
-
-Future backends:
-
--   📋 Modern C++
--   📋 OpenMP
--   📋 CUDA
--   📋 AMD ROCm
--   📋 Distributed Computing
-
-------------------------------------------------------------------------
+---
 
 # Feature Matrix
 
-  Capability                           Status
-  ----------------------------------- --------
-  Laplace Solver                         ✅
-  Poisson Solver                         ✅
-  Equilibrium Solver                     ✅
-  Drift--Diffusion Solver                ✅
-  Current Conservation Verification      ✅
-  Automated Test Suite                   ✅
-  Voltage Sweep Framework                🚧
-  Current--Voltage Characteristics       🚧
-  Two-Dimensional TCAD                   📋
-  GPU Acceleration                       📋
-  Machine Learning                       📋
+| Capability | Status |
+|---|---|
+| Core grid / field / material architecture | ✅ |
+| 1D Laplace solver | ✅ |
+| 1D Poisson solver | ✅ |
+| Spatially varying permittivity | ✅ |
+| Heterogeneous dielectric interfaces | ✅ |
+| Dirichlet boundary conditions | ✅ |
+| Mixed Dirichlet-Neumann boundary conditions | ✅ |
+| Sparse CSR matrix formulation | ✅ |
+| Sparse direct solver | ✅ |
+| Dense direct solver | ✅ |
+| Conjugate Gradient solver | ✅ |
+| Jacobi / identity preconditioning | ✅ |
+| Electrostatic postprocessing | ✅ |
+| Face-centred displacement analysis | ✅ |
+| Manufactured-solution convergence study | ✅ |
+| Verified second-order 1D convergence | ✅ |
+| 2D conservative electrostatic solver | 🚧 |
+| 2D verification completion | 🚧 |
+| Nonlinear semiconductor electrostatics | 📋 |
+| Drift-diffusion transport | 📋 |
+| 3D device simulation | 📋 |
+| C++ numerical backends | 📋 |
+| OpenMP CPU acceleration | 📋 |
+| NVIDIA CUDA acceleration | 📋 |
+| AMD ROCm acceleration | 📋 |
+| Distributed simulation workflows | 📋 |
+| Machine-learning surrogate models | 📋 |
+| Sensitivity analysis | 📋 |
+| Multi-objective optimisation | 📋 |
+| Interactive desktop application | 📋 |
 
-------------------------------------------------------------------------
+---
 
-# Design Philosophy
+# Verified 1D Poisson Reference Solver
 
-DeviceForge follows a verification-first engineering philosophy.
+The current reference solver evaluates the one-dimensional electrostatic Poisson equation in conservative form:
 
-Core principles:
+\[
+-\frac{d}{dx}
+\left(
+\varepsilon_r(x)
+\frac{d\phi}{dx}
+\right)
+=
+\frac{\rho(x)}{\varepsilon_0}
+\]
 
--   Numerical correctness before optimisation
--   Verification before performance
--   Modular architecture
--   Scientific reproducibility
--   Automated testing
--   Extensible design
+where:
 
-Every new numerical method should include documentation, unit tests,
-verification and validation examples before becoming part of the
-production framework.
+- \(\phi\) is electrostatic potential
+- \(\rho\) is volumetric charge density
+- \(\varepsilon_0\) is the vacuum permittivity
+- \(\varepsilon_r(x)\) is the spatially varying relative permittivity
 
-------------------------------------------------------------------------
+The solver uses a conservative centred discretisation with harmonic averaging of permittivity at cell faces.
 
-# Quick Start
+For an interior node \(i\):
 
-``` bash
-git clone https://github.com/John-McKay-Engineering-Research/DeviceForge.git
-cd DeviceForge
-python -m venv .venv
+\[
+-\varepsilon_{r,i-1/2}\phi_{i-1}
++
+\left(
+\varepsilon_{r,i-1/2}
++
+\varepsilon_{r,i+1/2}
+\right)\phi_i
+-
+\varepsilon_{r,i+1/2}\phi_{i+1}
+=
+\frac{\rho_i\Delta x^2}{\varepsilon_0}.
+\]
+
+Face permittivity is calculated using:
+
+\[
+\varepsilon_{r,i+1/2}
+=
+\frac{
+2\varepsilon_{r,i}\varepsilon_{r,i+1}
+}{
+\varepsilon_{r,i}+\varepsilon_{r,i+1}
+}.
+\]
+
+This treatment preserves conservative electrostatic flux across discontinuous dielectric interfaces.
+
+Detailed numerical documentation is available in:
+
+```text
+docs/poisson_solver.md
 ```
 
-Windows:
+---
 
-``` powershell
-.venv\Scripts\activate
+# Numerical Verification
+
+Verification is treated as a core part of DeviceForge development rather than as a final validation step.
+
+The current 1D Poisson reference solver has been tested against:
+
+- analytical Laplace solutions
+- analytical uniform-charge Poisson solutions
+- heterogeneous dielectric stacks
+- electric-displacement continuity
+- mixed Dirichlet-Neumann analytical solutions
+- charged mixed-boundary analytical solutions
+- outward-normal Neumann sign conventions
+- matrix symmetry
+- matrix positive definiteness
+- sparse direct solution
+- Conjugate Gradient solution
+- manufactured-solution grid convergence
+- postprocessing regression tests
+- visualisation regression tests
+
+---
+
+## Manufactured-Solution Grid Convergence
+
+A smooth manufactured solution is used to measure formal spatial convergence:
+
+\[
+\phi(x)
+=
+\sin\left(
+\frac{\pi x}{L}
+\right).
+\]
+
+The corresponding charge density is:
+
+\[
+\rho(x)
+=
+\varepsilon_0
+\varepsilon_r
+\left(
+\frac{\pi}{L}
+\right)^2
+\sin\left(
+\frac{\pi x}{L}
+\right).
+\]
+
+The measured RMS potential errors are:
+
+| Grid points | RMS error | Error ratio | Observed order |
+|---:|---:|---:|---:|
+| 21 | 1.420642634989e-03 | - | - |
+| 41 | 3.591331920374e-04 | 3.955754 | 1.983953 |
+| 81 | 9.031491950553e-05 | 3.976455 | 1.991483 |
+| 161 | 2.264743183942e-05 | 3.987866 | 1.995617 |
+
+The observed order approaches:
+
+\[
+p=2
+\]
+
+confirming second-order spatial convergence for the verified 1D reference formulation.
+
+![1D Poisson grid convergence](examples/figures/verification/poisson_1d_grid_convergence/error_convergence.png)
+
+The complete verification study is available at:
+
+```text
+examples/verification/poisson_1d_grid_convergence.py
 ```
 
-Linux/macOS:
+---
 
-``` bash
-source .venv/bin/activate
+# Mixed Dirichlet-Neumann Verification
+
+The 1D reference solver supports:
+
+```text
+Dirichlet + Dirichlet
+Dirichlet + Neumann
+Neumann   + Dirichlet
 ```
 
-``` bash
-pip install -e .
-python -m pytest
-python examples/laplace_rectangle.py
+Neumann values are interpreted as outward-normal potential derivatives:
+
+\[
+\frac{\partial\phi}{\partial n}=g.
+\]
+
+In one dimension:
+
+\[
+g_L=-\frac{d\phi}{dx}
+\]
+
+at the left boundary and:
+
+\[
+g_R=+\frac{d\phi}{dx}
+\]
+
+at the right boundary.
+
+Charged mixed-boundary problems include the correct endpoint half-cell source contribution and are verified against analytical quadratic solutions.
+
+A standalone example is provided at:
+
+```text
+examples/electrostatics/mixed_boundary_1d.py
 ```
 
-------------------------------------------------------------------------
+---
 
-# Demonstrations
+# Heterogeneous Dielectric Verification
 
-Current demonstrations include:
+DeviceForge supports spatially varying material permittivity.
 
-1.  Laplace Equation
-2.  Poisson Equation
-3.  Fixed-Charge PN Junction
-4.  Equilibrium Semiconductor Solver
-5.  Self-Consistent Drift--Diffusion Solver
+At an uncharged dielectric interface, normal electric displacement should remain continuous:
 
-The following sections describe each demonstration in detail.
+\[
+D_n
+=
+\varepsilon_0
+\varepsilon_r
+E_n.
+\]
 
-------------------------------------------------------------------------
+The conservative face formulation is used to verify displacement continuity across dielectric interfaces.
 
-# Demonstrations
+A representative example is:
 
-The examples below demonstrate the current numerical capabilities of
-DeviceForge. Each example has been developed alongside analytical
-validation, automated testing and numerical verification.
-
-------------------------------------------------------------------------
-
-# Demonstration Gallery
-
-The current examples progress from classical electrostatics through to
-fully self-consistent semiconductor transport.
-
-  Demonstration                  Purpose
-  ------------------------------ ----------------------------------------
-  Laplace Equation               Electrostatic benchmark
-  Poisson Equation               Fixed charge electrostatics
-  Fixed-Charge PN Junction       Semiconductor electrostatics
-  Equilibrium PN Junction        Nonlinear Poisson with mobile carriers
-  Drift--Diffusion PN Junction   Coupled transport simulation
-
-------------------------------------------------------------------------
-
-# Self-Consistent Drift--Diffusion PN Junction
-
-The flagship example within DeviceForge is a one-dimensional
-self-consistent drift--diffusion solver using damped Gummel iteration.
-
-Implemented physics includes:
-
--   Nonlinear Poisson equation
--   Electron continuity equation
--   Hole continuity equation
--   Scharfetter--Gummel discretisation
--   Shockley--Read--Hall recombination
--   Electron current density
--   Hole current density
--   Total current density
-
-The implementation also includes independent numerical verification
-through:
-
--   Current conservation diagnostics
--   Continuity equation diagnostics
--   Algebraic residual verification
--   Mesh convergence studies
--   Automated regression tests
-
-Typical outputs include:
-
--   Electrostatic potential
--   Electron concentration
--   Hole concentration
--   Current density
--   Recombination profile
--   Solver convergence history
-
-
-![DeviceForge](examples\figures\examples\pn_junction_forward_bias_005V\03_carrier_concentrations.png)
-![DeviceForge](examples\figures\examples\pn_junction_forward_bias_005V\02_electrostatic_potential.png)
-![DeviceForge](examples\figures\examples\pn_junction_forward_bias_005V\04_current_density.png)
-
-------------------------------------------------------------------------
-
-# Equilibrium PN Junction
-
-The equilibrium solver couples electrostatic potential with mobile
-carrier concentrations to compute the built-in junction potential.
-
-Outputs include:
-
--   Potential
--   Carrier concentrations
--   Space-charge density
--   Built-in electric field
-
-``` bash
-python examples/pn_junction_equilibrium.py
+```text
+examples/electrostatics/dielectric_stack_1d.py
 ```
 
-![DeviceForge](examples\figures\examples\equilibrium_pn_charge_density.png)
-![DeviceForge](examples\figures\examples\equilibrium_pn_convergence.png)
-![DeviceForge](examples\figures\examples\equilibrium_pn_doping.png)
-![DeviceForge](examples\figures\examples\equilibrium_pn_electric_field.png)
-![DeviceForge](examples\figures\examples\equilibrium_pn_field_vectors.png)
-![DeviceForge](examples\figures\examples\equilibrium_pn_potential.png)
-![DeviceForge](examples\figures\examples\equilibrium_pn_profiles.png)
+---
 
-------------------------------------------------------------------------
+# Linear Algebra
 
-# Fixed-Charge PN Junction
+The electrostatic solver is intentionally separated from the linear-algebra implementation.
 
-This demonstration illustrates semiconductor electrostatics using fixed
-donor and acceptor doping.
+The Poisson solver assembles:
 
-Visualisations include:
+\[
+A\phi=b
+\]
 
--   Doping profile
--   Charge density
--   Electrostatic potential
--   Electric field
--   Centre-line profiles
+and delegates the system to a solver satisfying a common linear-solver interface.
 
-``` bash
-python examples/pn_junction_fixed_charge.py
+Current implementations include:
+
+- `DenseDirectSolver`
+- `SparseDirectSolver`
+- `ConjugateGradientSolver`
+
+Supported preconditioning includes:
+
+- `IdentityPreconditioner`
+- `JacobiPreconditioner`
+
+The assembled Poisson matrix is stored in sparse CSR format.
+
+Dirichlet conditions are applied using symmetric elimination so that matrix symmetry is preserved. Supported mixed-boundary systems are also verified to remain symmetric positive definite, enabling Conjugate Gradient solution.
+
+---
+
+# Electrostatic Postprocessing
+
+The current electrostatic analysis layer includes:
+
+- electrostatic potential
+- node-centred electric field
+- electric displacement
+- electrostatic energy density
+- face-centred electric field
+- face-centred relative permittivity
+- face-centred electric displacement
+
+The node-centred electric field is calculated using second-order centred interior differences and second-order one-sided endpoint differences where sufficient grid points are available.
+
+The face-centred quantities are particularly useful for analysing conservative behaviour across heterogeneous material interfaces.
+
+---
+
+# Visualisation
+
+DeviceForge includes scientific plotting functions for:
+
+- electrostatic potential
+- electric field
+- electric displacement
+- electrostatic energy density
+- relative permittivity
+- solver residual history
+- face-centred electric displacement
+
+Face-centred displacement visualisation includes stable handling for effectively constant conservative flux so that floating-point roundoff is not visually exaggerated.
+
+---
+
+# Two-Dimensional Electrostatics
+
+A separate two-dimensional electrostatic solver architecture has already been established.
+
+The current 2D checkpoint includes:
+
+- structured Cartesian grids
+- conservative five-point discretisation
+- heterogeneous relative permittivity
+- harmonic face averaging
+- sparse CSR assembly
+- symmetric Dirichlet elimination
+- configurable linear solvers
+- full outer Dirichlet boundaries
+- spatially varying boundary values
+- 2D postprocessing
+- 2D visualisation
+- analytical verification
+- manufactured-solution convergence testing
+
+Development is intentionally paused at this checkpoint while the 1D solver is completed and frozen as the numerical reference implementation.
+
+The next major development stage is to apply the verified 1D numerical conventions systematically to the existing 2D architecture and complete the corresponding verification suite.
+
+---
+
+# Software Architecture
+
+DeviceForge is designed around separation of responsibilities.
+
+```text
+Simulation
+    │
+    ▼
+SimulationRuntime
+    │
+    ▼
+SolverProtocol
+    │
+    ▼
+Concrete Solver
+    │
+    ▼
+SimulationResult
+    │
+    ▼
+RuntimeState
 ```
 
-------------------------------------------------------------------------
+The immutable `Simulation` object defines the problem.
 
-# Two-Dimensional Poisson Solver
+`SimulationRuntime` coordinates execution and mutable runtime state.
 
-The Poisson example extends the Laplace formulation by introducing fixed
-semiconductor charge.
+Concrete solvers operate only on simulation definitions and return `SimulationResult` objects.
 
-Example outputs:
+Higher-level workflows delegate execution to the runtime layer and analysis to postprocessing components.
 
--   Potential
--   Electric field
--   Analytical comparison
--   Solver convergence
+This separation is intended to make physics solvers easier to test, replace, benchmark, and extend.
 
-``` bash
-python examples/poisson_uniform_charge.py
-```
-
-------------------------------------------------------------------------
-
-# Two-Dimensional Laplace Solver
-
-The Laplace solver provides the electrostatic foundation for DeviceForge
-and serves as an analytical benchmark.
-
-Outputs include:
-
--   Potential contours
--   Electric-field magnitude
--   Electric-field vectors
--   Solver convergence
-
-``` bash
-python examples/laplace_rectangle.py
-```
-
-------------------------------------------------------------------------
-
-# Iterative Solver Benchmarks
-
-DeviceForge includes benchmarking utilities comparing classical
-iterative methods.
-
-Current comparisons include:
-
--   Jacobi
--   Gauss--Seidel
--   Successive Over-Relaxation (SOR)
-
-Metrics:
-
--   Runtime
--   Iteration count
--   Convergence history
--   Numerical error
-
-``` bash
-python benchmarks/compare_iterative_solvers.py
-```
-
-------------------------------------------------------------------------
-
-# Summary
-
-These demonstrations form a progression from classical electrostatics to
-modern semiconductor transport simulation.
-
-Future demonstrations will include:
-
--   Voltage sweeps
--   Current--voltage (I--V) characteristics
--   MOS capacitors
--   MOSFETs
--   FinFETs
--   Two-dimensional drift--diffusion
--   Electro-thermal coupling
-
-------------------------------------------------------------------------
-
-# Architecture
-
-DeviceForge has been designed around a modular, extensible architecture
-that separates semiconductor physics from numerical algorithms and
-software infrastructure.
-
-------------------------------------------------------------------------
-
-# Architectural Principles
-
-The framework is built around several guiding principles:
-
--   Separation of physics from implementation
--   Independent, reusable solver components
--   Backend-independent numerical kernels
--   Verification-first development
--   Extensibility for future research
-
-------------------------------------------------------------------------
-
-# Project Structure
-
-``` text
-deviceforge/
-├── core/
-├── geometry/
-├── physics/
-├── solvers/
-├── postprocessing/
-├── visualisation/
-├── optimisation/
-├── io/
-└── utils/
-```
-
-Each package has a clearly defined responsibility, making it possible to
-extend one part of the framework without affecting the rest.
-
-------------------------------------------------------------------------
+---
 
 # Core Components
 
 ## Grid
 
-Defines structured computational grids, spacing, indexing and coordinate
-transforms.
+Defines computational dimension, shape, spacing, and coordinates.
 
-## Materials
+## Field
 
-Stores semiconductor material properties such as:
+Represents physical quantities defined over a grid.
 
--   Permittivity
--   Mobility
--   Intrinsic carrier concentration
--   Bandgap
--   Electron affinity
+## FaceField
 
-## Regions
+Represents quantities collocated between neighbouring grid nodes.
 
-Represents geometric regions and associates them with material
-definitions.
+## Material
+
+Stores physical material properties such as relative permittivity.
+
+## Region
+
+Associates portions of the computational domain with material definitions.
 
 ## Device
 
-Aggregates regions, doping profiles, contacts and boundary conditions
-into a complete simulation model.
+Aggregates regions and provides material-property fields across the computational domain.
 
-------------------------------------------------------------------------
+## Boundary Condition
 
-# Physics Layer
+Represents prescribed simulation boundary information, including scalar and spatially varying values.
 
-The physics layer contains reusable implementations of semiconductor
-models including:
+## Simulation
 
--   Poisson equation
--   Drift--diffusion transport
--   Carrier statistics
--   Recombination models
--   Current density calculations
+Stores the immutable definition of a numerical problem.
 
-Future additions include:
+## Simulation Result
 
--   Band-gap narrowing
--   Mobility degradation
--   Velocity saturation
--   Quantum corrections
--   Electro-thermal coupling
+Stores solved fields, convergence information, residual histories, runtime, backend information, and numerical metadata.
 
-------------------------------------------------------------------------
+## Workflow
 
-# Solver Layer
+Provides higher-level orchestration for simulation execution, analysis, and postprocessing.
 
-The solver layer contains the numerical algorithms used to solve the
-governing equations.
+---
 
-Current solvers include:
+# Project Structure
 
--   Laplace
--   Poisson
--   Nonlinear equilibrium
--   Gummel iteration
+The repository is organised into modular scientific software components:
 
-Planned additions include:
+```text
+DeviceForge/
+├── src/
+│   └── deviceforge/
+│       ├── core/
+│       ├── geometry/
+│       ├── physics/
+│       ├── solvers/
+│       ├── postprocessing/
+│       ├── visualisation/
+│       └── linalg/
+│
+├── tests/
+├── examples/
+├── benchmarks/
+├── docs/
+└── README.md
+```
 
--   Newton--Raphson
--   Multigrid
--   Krylov methods
--   Adaptive mesh refinement
+The exact repository structure evolves as new capabilities are introduced.
 
-------------------------------------------------------------------------
+---
 
-# Visualisation
+# Examples
 
-DeviceForge produces publication-quality visualisations including:
+Representative current examples include:
 
--   Potential
--   Electric field
--   Carrier concentrations
--   Current density
--   Recombination
--   Convergence history
+```text
+examples/electrostatics/dielectric_stack_1d.py
+examples/electrostatics/mixed_boundary_1d.py
+examples/verification/poisson_1d_grid_convergence.py
+examples/electrostatics/laplace_2d.py
+examples/electrostatics/sinusoidal_laplace_2d.py
+```
 
-Future plans include an interactive GUI for simulation setup and result
-exploration.
+These examples are intended to demonstrate both numerical capability and verification methodology.
 
-------------------------------------------------------------------------
+---
 
-# Optimisation Roadmap
+# Documentation
 
-Long-term optimisation capabilities include:
+Technical documentation is located in:
 
--   Parameter sweeps
--   Design of experiments
--   Sensitivity analysis
--   Gradient-free optimisation
--   Bayesian optimisation
--   Machine-learning-assisted optimisation
+```text
+docs/
+```
 
-------------------------------------------------------------------------
+Current documentation includes:
 
-# High-Performance Computing
+- `architecture.md`
+- `benchmarking.md`
+- `examples.md`
+- `mathematics.md`
+- `poisson_solver.md`
+- `solver_design.md`
 
-The software is intentionally designed to support multiple computational
-backends.
+The 1D Poisson reference-solver specification is documented in:
 
-Planned acceleration technologies include:
+```text
+docs/poisson_solver.md
+```
 
--   Modern C++
--   OpenMP
--   NVIDIA CUDA
--   AMD ROCm
--   Distributed computing
--   Multi-GPU execution
+---
 
-This separation allows numerical algorithms to remain largely
-independent of the execution backend.
+# Quick Start
 
-------------------------------------------------------------------------
+Clone the repository:
 
-# Software Quality
+```bash
+git clone https://github.com/John-McKay-Engineering-Research/DeviceForge.git
+cd DeviceForge
+```
 
-Every major component is expected to include:
+Create a virtual environment:
 
--   Documentation
--   Unit tests
--   Numerical verification
--   Regression tests
--   Example problems
+```bash
+python -m venv venv
+```
 
-This verification-first philosophy ensures long-term maintainability and
-scientific reproducibility.
+Windows:
 
-------------------------------------------------------------------------
+```powershell
+venv\Scripts\activate
+```
 
-# Looking Ahead
+Linux/macOS:
 
-As DeviceForge evolves, the architecture will support:
+```bash
+source venv/bin/activate
+```
 
--   Two-dimensional TCAD
--   Three-dimensional TCAD
--   Transient simulation
--   Electro-thermal coupling
--   GPU-native solvers
--   AI-assisted device optimisation
+Install DeviceForge in editable mode:
 
-The objective is to provide a modern, research-oriented semiconductor
-simulation framework that remains transparent, extensible and
-scientifically rigorous.
+```bash
+pip install -e .
+```
 
-------------------------------------------------------------------------
+Run the automated test suite:
 
-# Numerical Methods
+```bash
+python -m pytest -v
+```
 
-DeviceForge implements the governing equations of semiconductor device
-physics using transparent numerical methods designed for accuracy,
-verification and future extensibility.
+Run the 1D manufactured-solution verification example:
 
-------------------------------------------------------------------------
+```bash
+python examples/verification/poisson_1d_grid_convergence.py
+```
 
-# Governing Equations
+Run the mixed-boundary example:
 
-The framework is built around the coupled semiconductor drift--diffusion
-equations:
+```bash
+python examples/electrostatics/mixed_boundary_1d.py
+```
 
-1.  Poisson equation
-2.  Electron continuity equation
-3.  Hole continuity equation
+---
 
-Together these describe the electrostatic potential, carrier transport
-and current flow within semiconductor devices.
+# Design Philosophy
 
-------------------------------------------------------------------------
+DeviceForge follows a verification-first engineering philosophy.
 
-# Poisson Equation
+Core principles include:
 
-The electrostatic potential is obtained by solving Poisson's equation
-using finite-difference discretisation.
+- numerical correctness before optimisation
+- verification before performance
+- transparent numerical methods
+- modular architecture
+- scientific reproducibility
+- automated testing
+- extensible interfaces
+- incremental development
+- meaningful regression coverage
 
-The charge density includes:
+A numerical feature should not be considered complete until it is accompanied by appropriate:
 
--   Electrons
--   Holes
--   Ionised donors
--   Ionised acceptors
+- implementation tests
+- regression tests
+- analytical or manufactured verification
+- documentation
+- representative examples
 
-Poisson's equation forms the backbone of every DeviceForge simulation.
+---
 
-------------------------------------------------------------------------
+# Verification and Validation
 
-# Carrier Statistics
+Verification asks:
 
-DeviceForge currently employs classical carrier statistics to compute
-equilibrium electron and hole concentrations.
+> **Are the equations being solved correctly?**
 
-Implemented concepts include:
+Current verification approaches include:
 
--   Intrinsic carrier concentration
--   Fermi potential
--   Built-in potential
--   Charge neutrality
--   Thermal equilibrium
+- analytical solutions
+- manufactured solutions
+- grid-convergence studies
+- conservation checks
+- matrix-property checks
+- residual monitoring
+- independent solver comparisons
+- automated regression testing
 
-Future work will introduce:
+Validation asks:
 
--   Fermi--Dirac statistics
--   Degenerate semiconductors
--   Band-gap narrowing
+> **Are the equations and models appropriate for the intended physical problem?**
 
-------------------------------------------------------------------------
+As DeviceForge progresses into more complete semiconductor-device physics, validation will increasingly involve:
 
-# Drift--Diffusion Transport
+- published benchmark problems
+- academic literature
+- experimentally measured behaviour
+- cross-comparison with established simulation tools where appropriate
 
-Carrier transport is modelled using the classical drift--diffusion
-formulation.
-
-Each carrier current consists of:
-
--   Drift due to electric field
--   Diffusion due to concentration gradients
-
-Current calculations are performed consistently throughout the
-computational domain.
-
-------------------------------------------------------------------------
-
-# Scharfetter--Gummel Discretisation
-
-DeviceForge uses the Scharfetter--Gummel exponential fitting scheme to
-discretise the continuity equations.
-
-Advantages include:
-
--   Excellent numerical stability
--   Accurate current conservation
--   Robust performance for strong electric fields
--   Industry-standard formulation
-
-This approach forms the foundation of most commercial TCAD tools.
-
-------------------------------------------------------------------------
-
-# Gummel Iteration
-
-The nonlinear semiconductor equations are solved using damped Gummel
-iteration.
-
-Each iteration performs:
-
-1.  Solve Poisson equation
-2.  Update electron concentration
-3.  Update hole concentration
-4.  Compute residuals
-5.  Check convergence
-
-The process repeats until the prescribed convergence tolerance is
-satisfied.
-
-------------------------------------------------------------------------
-
-# Boundary Conditions
-
-Supported boundary conditions include:
-
--   Dirichlet
--   Neumann
-
-Future releases will include:
-
--   Ohmic contacts
--   Schottky contacts
--   Mixed boundary conditions
--   Interface models
-
-------------------------------------------------------------------------
-
-# Linear Solvers
-
-Current implementations include iterative finite-difference solvers
-suitable for structured grids.
-
-Planned solver technologies include:
-
--   Conjugate Gradient
--   GMRES
--   BiCGSTAB
--   Algebraic Multigrid
--   Sparse direct solvers
-
-------------------------------------------------------------------------
-
-# Numerical Stability
-
-DeviceForge incorporates several techniques to improve robustness:
-
--   Residual monitoring
--   Damping
--   Current conservation checks
--   Mesh convergence studies
--   Regression testing
-
-These diagnostics are used throughout development to verify numerical
-correctness.
-
-------------------------------------------------------------------------
-
-# Future Physics
-
-The numerical framework has been designed to accommodate increasingly
-sophisticated semiconductor models.
-
-Planned additions include:
-
--   Field-dependent mobility
--   Velocity saturation
--   Auger recombination
--   Trap-assisted transport
--   Quantum corrections
--   Electro-thermal coupling
--   Transient simulation
--   Three-dimensional device simulation
-
-------------------------------------------------------------------------
-
-# Scientific Philosophy
-
-The emphasis of DeviceForge is not simply producing simulation results,
-but understanding and verifying the algorithms that generate them.
-
-Every numerical model is expected to be:
-
--   Documented
--   Tested
--   Verified
--   Validated
--   Reproducible
-
-This philosophy aims to make DeviceForge a valuable platform for both
-semiconductor research and scientific software engineering.
-
-------------------------------------------------------------------------
-
-# Verification, Validation and Testing
-
-DeviceForge adopts a verification-first development philosophy. Every
-numerical feature is expected to be accompanied by automated tests,
-numerical verification and documented validation before it is considered
-complete.
-
-------------------------------------------------------------------------
-
-# Verification Strategy
-
-Verification answers the question:
-
-> **"Are we solving the equations correctly?"**
-
-Current verification activities include:
-
--   Analytical benchmark comparison
--   Mesh convergence studies
--   Conservation checks
--   Residual monitoring
--   Cross-validation with independent implementations
--   Automated regression testing
-
-------------------------------------------------------------------------
-
-# Validation Strategy
-
-Validation answers the complementary question:
-
-> **"Are we solving the correct equations for the intended physical
-> problem?"**
-
-As DeviceForge evolves, validation will increasingly compare simulation
-results against:
-
--   Published benchmark problems
--   Academic literature
--   Experimental measurements
--   Commercial TCAD reference solutions where appropriate
-
-------------------------------------------------------------------------
-
-# Automated Testing
-
-DeviceForge includes a growing automated test suite covering the major
-software components.
-
-Current tests verify:
-
--   Grid generation
--   Material definitions
--   Regions
--   Devices
--   Boundary conditions
--   Field objects
--   Solver behaviour
--   Numerical utilities
-
-The objective is that every pull request can be checked automatically to
-detect regressions.
-
-------------------------------------------------------------------------
-
-# Numerical Diagnostics
-
-Each solver reports diagnostic information that assists with
-verification and debugging.
-
-Typical diagnostics include:
-
--   Residual history
--   Iteration count
--   Convergence tolerance
--   Current conservation error
--   Maximum update magnitude
--   Runtime statistics
-
-These outputs make solver behaviour transparent and reproducible.
-
-------------------------------------------------------------------------
-
-# Mesh Convergence
-
-Numerical accuracy should improve as the computational mesh is refined.
-
-Future documentation will include convergence studies demonstrating:
-
--   Potential convergence
--   Electric-field convergence
--   Carrier-density convergence
--   Current-density convergence
-
-------------------------------------------------------------------------
-
-# Regression Testing
-
-Regression testing ensures that new features do not unintentionally
-alter existing behaviour.
-
-Typical regression tests compare:
-
--   Numerical solutions
--   Residual histories
--   Solver iteration counts
--   Output files
--   Benchmark metrics
-
-------------------------------------------------------------------------
-
-# Continuous Integration
-
-As DeviceForge grows, automated CI workflows will execute:
-
--   Static analysis
--   Code formatting
--   Unit tests
--   Numerical benchmark problems
--   Documentation checks
-
-This provides rapid feedback when changes are introduced.
-
-------------------------------------------------------------------------
-
-# Code Quality
-
-The project aims to follow modern scientific software engineering
-practices, including:
-
--   Modular design
--   Clear documentation
--   Type hints
--   Consistent coding standards
--   Comprehensive test coverage
-
-------------------------------------------------------------------------
-
-# Performance Benchmarking
-
-Future benchmarking will compare:
-
--   CPU backends
--   GPU backends
--   Solver scalability
--   Parallel efficiency
--   Memory usage
--   Strong and weak scaling
-
-These benchmarks will guide future optimisation work.
-
-------------------------------------------------------------------------
-
-# Future Validation Roadmap
-
-Planned validation activities include:
-
--   MOS capacitor benchmarks
--   PN-junction reference problems
--   MOSFET transfer characteristics
--   FinFET benchmark devices
--   Electro-thermal verification
--   Three-dimensional validation studies
-
-------------------------------------------------------------------------
-
-# Summary
-
-Verification, validation and testing are treated as integral parts of
-DeviceForge rather than afterthoughts. The long-term objective is to
-provide confidence that every numerical result produced by the framework
-is scientifically reliable, reproducible and fully traceable.
-
-------------------------------------------------------------------------
-
-# Roadmap
-
-DeviceForge is intended to evolve from a research-focused educational
-TCAD framework into a modern semiconductor simulation platform capable
-of supporting advanced numerical methods, high-performance computing and
-AI-assisted engineering optimisation.
-
-------------------------------------------------------------------------
+---
 
 # Development Roadmap
 
-## Short Term
+Development follows a staged numerical-verification strategy.
 
-Current priorities include:
+```text
+Verified 1D electrostatic reference solver
+        ↓
+Complete and verify 2D electrostatics
+        ↓
+Semiconductor electrostatics
+        ↓
+Self-consistent carrier physics
+        ↓
+Drift-diffusion transport
+        ↓
+2D semiconductor transport
+        ↓
+3D device simulation
+        ↓
+High-performance backends
+        ↓
+Interactive application
+        ↓
+Design-space exploration and optimisation
+```
 
--   Voltage sweep capability
--   Current--voltage (I--V) characteristics
--   MOS capacitor simulation
--   Two-dimensional Poisson solver
--   Improved plotting and visualisation
--   Expanded documentation
--   Continuous Integration workflows
+## Near-Term
 
-## Medium Term
+Current priorities are:
+
+- freeze the verified 1D electrostatic reference solver
+- complete equivalent 2D numerical behaviour
+- verify 2D convergence and heterogeneous-interface behaviour
+- strengthen solver documentation
+- maintain regression coverage
+
+## Medium-Term
 
 Planned developments include:
 
--   Two-dimensional drift--diffusion
--   Newton-based nonlinear solvers
--   Sparse linear algebra
--   Adaptive mesh refinement
--   GPU acceleration (CUDA and ROCm)
--   Parameter studies
--   Sensitivity analysis
+- nonlinear semiconductor electrostatics
+- carrier statistics
+- electron and hole continuity equations
+- Scharfetter-Gummel transport discretisation
+- recombination models
+- drift-diffusion transport
+- bias stepping
+- current extraction
+- nonlinear convergence control
 
-## Long Term
+## Long-Term
 
-The long-term vision includes:
+The long-term direction includes:
 
--   Three-dimensional TCAD
--   Electro-thermal simulation
--   Process simulation
--   AI-assisted device optimisation
--   Distributed HPC execution
--   Interactive graphical interface
--   Plugin architecture for custom physics models
+- three-dimensional device simulation
+- gate-all-around transistor examples
+- electro-thermal coupling
+- modern C++ solver backends
+- OpenMP CPU acceleration
+- NVIDIA CUDA
+- AMD ROCm
+- distributed simulation campaigns
+- desktop graphical interface
+- project-management workflows
+- sensitivity analysis
+- surrogate modelling
+- multi-objective optimisation
 
-------------------------------------------------------------------------
+---
+
+# High-Performance Computing
+
+DeviceForge is designed so that numerical physics can eventually be separated from hardware-specific execution.
+
+Potential future execution backends include:
+
+- Python / NumPy reference implementations
+- modern C++
+- OpenMP
+- NVIDIA CUDA
+- AMD ROCm
+- distributed-memory computing
+
+Reference implementations are expected to remain readable and verifiable even when accelerated implementations are introduced.
+
+Performance improvements should not be accepted unless they preserve verified physical and numerical behaviour.
+
+---
+
+# Machine Learning and Engineering Optimisation
+
+Later DeviceForge stages are intended to explore simulation-assisted device optimisation.
+
+Potential capabilities include:
+
+- design of experiments
+- Latin hypercube sampling
+- sensitivity analysis
+- surrogate modelling
+- Bayesian optimisation
+- multi-objective genetic algorithms
+- Pareto-front analysis
+- automated design-space exploration
+
+Machine-learning methods are intended to complement first-principles simulation rather than replace it.
+
+---
+
+# Limitations
+
+DeviceForge is an independent research and engineering software project.
+
+It is not intended to:
+
+- replace commercial semiconductor TCAD platforms
+- provide fabrication-qualified device predictions
+- reproduce proprietary physical models
+- model every semiconductor transport mechanism
+- provide industrial process simulation at the current stage
+
+Results must be interpreted within the assumptions and verification status of each implemented model.
+
+The currently verified reference solver is specifically a **linear 1D electrostatic Poisson solver**. Higher-order semiconductor transport capabilities remain part of later development stages.
+
+---
+
+# Software Quality
+
+The project aims to follow modern scientific software engineering practices including:
+
+- type hints
+- modular design
+- unit testing
+- regression testing
+- numerical verification
+- scientific reproducibility
+- consistent SI units
+- explicit solver metadata
+- clear documentation
+- incremental Git development
+- meaningful commit history
+
+Correctness and maintainability are prioritised over premature optimisation.
+
+---
 
 # Contributing
 
 Contributions are welcome.
 
-Areas where contributions will be especially valuable include:
+Areas of particular interest include:
 
--   Semiconductor physics
--   Numerical methods
--   Scientific computing
--   GPU programming
--   Documentation
--   Testing and verification
--   Visualisation
--   Performance optimisation
+- numerical methods
+- semiconductor physics
+- scientific computing
+- sparse linear algebra
+- verification
+- testing
+- visualisation
+- performance optimisation
+- documentation
 
-When contributing, please:
+When contributing:
 
-1.  Create a feature branch.
-2.  Include unit tests where appropriate.
-3.  Document new functionality.
-4.  Verify numerical correctness.
-5.  Submit a pull request for review.
+1. create a feature branch
+2. include tests where appropriate
+3. document new functionality
+4. verify numerical correctness
+5. submit a pull request
 
-------------------------------------------------------------------------
-
-# Coding Standards
-
-DeviceForge aims to follow modern scientific software engineering
-practices.
-
-General guidelines include:
-
--   Clear, readable code
--   Descriptive variable names
--   Type hints where appropriate
--   Small, reusable components
--   Comprehensive documentation
--   Automated testing
-
-Correctness and maintainability are prioritised over premature
-optimisation.
-
-------------------------------------------------------------------------
+---
 
 # Citation
 
-If DeviceForge contributes to your research, please consider citing the
-project.
+A formal citation and DOI will be added when DeviceForge reaches a stable public release.
 
-A formal citation and DOI will be added when the project reaches its
-first stable public release.
+Until then, the repository may be referenced as:
 
-Example placeholder:
-
-``` text
+```text
 McKay, J.
-DeviceForge: An Open-Source Semiconductor TCAD Framework.
-GitHub (2026).
+DeviceForge: An Open-Source Semiconductor TCAD Research Framework.
+GitHub, 2026.
 ```
 
-------------------------------------------------------------------------
+---
 
 # Recommended Reading
 
-The following references have strongly influenced the numerical methods
-and scientific philosophy behind DeviceForge:
+References that influence the numerical and scientific direction of DeviceForge include:
 
--   Selberherr --- *Analysis and Simulation of Semiconductor Devices*
--   Sze & Ng --- *Physics of Semiconductor Devices*
--   Lundstrom --- *Fundamentals of Carrier Transport*
--   Press et al. --- *Numerical Recipes*
--   Saad --- *Iterative Methods for Sparse Linear Systems*
+- Selberherr — *Analysis and Simulation of Semiconductor Devices*
+- Sze & Ng — *Physics of Semiconductor Devices*
+- Lundstrom — *Fundamentals of Carrier Transport*
+- Press et al. — *Numerical Recipes*
+- Saad — *Iterative Methods for Sparse Linear Systems*
 
-------------------------------------------------------------------------
+---
 
 # Licence
 
 DeviceForge is released under the MIT License.
 
-See the `LICENSE` file for complete licensing information.
+See:
 
-------------------------------------------------------------------------
+```text
+LICENSE
+```
+
+for complete licensing information.
+
+---
 
 # Acknowledgements
 
-DeviceForge has been inspired by decades of research in:
+DeviceForge draws inspiration from research in:
 
--   Semiconductor device physics
--   Numerical analysis
--   Scientific computing
--   High-performance computing
--   Open-source engineering software
+- semiconductor device physics
+- numerical analysis
+- scientific computing
+- high-performance computing
+- optimisation
+- open-source engineering software
 
-The project also draws upon knowledge developed through doctoral
-research in computational engineering, finite element analysis,
-optimisation and scientific software development.
+The project also builds on experience in computational engineering, numerical simulation, optimisation, automated simulation workflows, and scientific software development.
 
-------------------------------------------------------------------------
-
-
-# High-Performance Computing, GPU Acceleration & AI Optimisation
-
-DeviceForge has been designed with a long-term vision that extends
-beyond a traditional educational TCAD solver. The architecture is
-intended to support high-performance computing (HPC), heterogeneous
-hardware, and AI-assisted engineering workflows while preserving
-numerical transparency and scientific reproducibility.
-
-------------------------------------------------------------------------
-
-# Why High-Performance Computing?
-
-Semiconductor device simulation is computationally demanding. As device
-complexity, mesh resolution and physical models increase, computational
-cost can grow dramatically.
-
-High-performance computing enables:
-
--   Faster simulation turnaround
--   Larger device models
--   Higher mesh resolutions
--   Parameter sweeps
--   Design-space exploration
--   Multi-physics coupling
-
-The objective is to make advanced simulations practical on both desktop
-workstations and compute clusters.
-
-------------------------------------------------------------------------
-
-# Backend Philosophy
-
-DeviceForge separates numerical algorithms from execution backends.
-
-This allows the same mathematical formulation to target multiple
-hardware platforms without changing the underlying physics.
-
-Planned execution backends include:
-
--   Python (research and rapid prototyping)
--   Modern C++ (high-performance kernels)
--   OpenMP (multi-core CPUs)
--   NVIDIA CUDA
--   AMD ROCm
--   Distributed-memory HPC
-
-------------------------------------------------------------------------
-
-# CPU and GPU Computing
-
-Different workloads benefit from different hardware.
-
-CPU execution is often advantageous for:
-
--   Small simulation domains
--   Low-latency iterative development
--   Complex control flow
--   Debugging and verification
-
-GPU execution becomes increasingly beneficial for:
-
--   Large meshes
--   Repeated parameter studies
--   Dense numerical kernels
--   Massive parallelism
--   Optimisation workflows
-
-A long-term goal is to estimate computational workload before execution
-and recommend the most appropriate backend automatically.
-
-------------------------------------------------------------------------
-
-# Numerical Precision
-
-Scientific credibility requires careful treatment of numerical
-precision.
-
-Future backends will support:
-
--   FP64 (double precision)
--   FP32 (single precision)
--   Mixed-precision strategies where appropriate
-
-Performance gains should never come at the expense of verified numerical
-correctness.
-
-------------------------------------------------------------------------
-
-# Performance Optimisation
-
-Future optimisation work will investigate:
-
--   Sparse matrix storage
--   Cache-aware algorithms
--   SIMD vectorisation
--   Efficient memory access patterns
--   Solver profiling
--   Reduced allocation overhead
-
-Performance improvements will be guided by profiling and benchmark data
-rather than premature optimisation.
-
-------------------------------------------------------------------------
-
-# Distributed Computing
-
-Many engineering studies require thousands of simulations rather than
-one extremely large simulation.
-
-Future distributed capabilities may support:
-
--   Parameter sweeps
--   Monte Carlo studies
--   Optimisation campaigns
--   Design-of-experiments
--   Cluster execution
--   Cloud deployment
-
-The framework is intended to scale from a laptop to multi-node compute
-resources.
-
-------------------------------------------------------------------------
-
-# AI-Assisted Engineering
-
-Machine learning has the potential to accelerate engineering workflows
-by reducing the number of expensive numerical simulations.
-
-Potential applications include:
-
--   Surrogate modelling
--   Bayesian optimisation
--   Sensitivity analysis
--   Design-space exploration
--   Automated parameter tuning
--   Intelligent sampling
-
-These methods complement, rather than replace, first-principles physics
-simulations.
-
-------------------------------------------------------------------------
-
-# Long-Term Vision
-
-The long-term ambition for DeviceForge includes:
-
--   Two-dimensional TCAD
--   Three-dimensional TCAD
--   Electro-thermal coupling
--   Process simulation
--   GPU-native solvers
--   AI-assisted device optimisation
--   Interactive desktop application
--   Plugin architecture
--   Research-grade HPC workflows
-
-------------------------------------------------------------------------
-
-
-# Closing Remarks
-
-DeviceForge is intended to demonstrate how modern semiconductor
-simulation software can combine rigorous numerical methods,
-high-performance computing, machine learning and contemporary software
-engineering into a transparent and extensible research platform.
-
-The project will continue to evolve incrementally, with new capabilities
-added only after they have been implemented, tested and verified. This
-engineering-first philosophy aims to ensure that DeviceForge remains
-both scientifically credible and technically robust as it grows.
-
------------------------------------------------------------------------
+---
 
 # Contact
 
-Project Repository
+Project repository:
 
-``` text
+```text
 https://github.com/John-McKay-Engineering-Research/DeviceForge
 ```
 
-Issues, feature requests and discussions are welcome through the GitHub
-repository.
+Issues, feature requests, and discussions are welcome through the GitHub repository.
 
-------------------------------------------------------------------------
+---
+
+DeviceForge will continue to evolve incrementally, with new numerical capabilities promoted to stable reference functionality only after they have been implemented, tested, documented, and verified.
