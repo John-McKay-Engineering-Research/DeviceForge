@@ -600,64 +600,6 @@ def test_positive_charge_produces_positive_internal_potential(
     assert result.potential.values[-1] == pytest.approx(0.0)
     assert np.all(result.potential.values[1:-1] > 0.0)
 
-"""
-def test_poisson_solver_rejects_neumann_boundary(
-    simulation,
-) -> None:
-    grid = simulation.grid
-
-    left_mask = np.zeros(
-        grid.shape,
-        dtype=np.bool_,
-    )
-    left_mask[0] = True
-
-    right_mask = np.zeros(
-        grid.shape,
-        dtype=np.bool_,
-    )
-    right_mask[-1] = True
-
-    left_boundary = BoundaryCondition(
-        name="left_contact",
-        grid=grid,
-        mask=left_mask,
-        condition_type=BoundaryConditionType.DIRICHLET,
-        value=0.0,
-        units="V",
-    )
-
-    right_boundary = BoundaryCondition(
-        name="right_flux",
-        grid=grid,
-        mask=right_mask,
-        condition_type=BoundaryConditionType.NEUMANN,
-        value=0.0,
-        units="V/m",
-    )
-
-    neumann_simulation = Simulation(
-        device=simulation.device,
-        boundary_conditions=(
-            left_boundary,
-            right_boundary,
-        ),
-        tolerance=1.0e-8,
-        max_iterations=500,
-        initial_potential=0.0,
-        name="unsupported_neumann_test",
-    )
-
-    solver = PoissonSolver()
-
-    with pytest.raises(
-        ValueError,
-        match="only Dirichlet",
-    ):
-        solver.solve(
-            neumann_simulation
-        )
-"""
 
 def test_poisson_solver_supports_left_dirichlet_right_neumann(
     simulation,

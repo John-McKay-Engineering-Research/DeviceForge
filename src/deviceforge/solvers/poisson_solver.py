@@ -48,7 +48,10 @@ class PoissonSolver:
     A simulation without a prescribed charge-density field is treated as
     having zero charge density and therefore reduces to Laplace's equation.
 
-    Only Dirichlet boundary conditions are currently supported.
+    Supported endpoint boundary-condition combinations are
+    Dirichlet-Dirichlet, Dirichlet-Neumann, and Neumann-Dirichlet.
+    Pure-Neumann problems are currently rejected because the absolute
+    potential is undefined without an additional gauge condition.
 
     The class satisfies SolverProtocol structurally and does not inherit
     from or import that protocol.
