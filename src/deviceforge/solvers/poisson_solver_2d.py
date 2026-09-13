@@ -222,9 +222,23 @@ class PoissonSolver2D:
 
     @staticmethod
     def _validate_simulation(
-        simulation: Simulation,
+            simulation: Simulation,
     ) -> None:
-        """Validate that the simulation is supported."""
+        """
+        Validate that the simulation is supported.
+
+        Mixed Dirichlet-Neumann outer-boundary conditions are supported.
+        Neumann values represent the outward-normal potential derivative
+
+            d(phi) / d(n)
+
+        in volts per metre.
+
+        The current mixed-boundary implementation requires all four corner
+        nodes to be Dirichlet constrained. Pure-Neumann problems are rejected
+        because the absolute electrostatic potential would otherwise be
+        undefined without an additional gauge condition.
+        """
 
         if simulation.grid.dimension != 2:
             raise ValueError(
@@ -232,25 +246,34 @@ class PoissonSolver2D:
             )
 
         if any(
-            number_of_points < 3
-            for number_of_points in simulation.grid.shape
+                number_of_points < 3
+                for number_of_points in simulation.grid.shape
         ):
             raise ValueError(
                 "PoissonSolver2D requires at least three grid points "
                 "along each axis."
             )
 
-        if simulation.neumann_boundaries:
-            raise ValueError(
-                "PoissonSolver2D currently supports only Dirichlet "
-                "boundary conditions."
-            )
-
         if not simulation.dirichlet_boundaries:
             raise ValueError(
                 "PoissonSolver2D requires at least one Dirichlet "
-                "boundary condition."
+                "boundary condition to define the electrostatic "
+                "potential gauge."
             )
+
+        for boundary in simulation.dirichlet_boundaries:
+            if boundary.units != "V":
+                raise ValueError(
+                    "PoissonSolver2D Dirichlet boundary conditions "
+                    "must use units 'V'."
+                )
+
+        for boundary in simulation.neumann_boundaries:
+            if boundary.units != "V/m":
+                raise ValueError(
+                    "PoissonSolver2D Neumann boundary conditions "
+                    "must use units 'V/m'."
+                )
 
         if not simulation.device.require_full_coverage:
             raise ValueError(
@@ -258,25 +281,100 @@ class PoissonSolver2D:
                 "of the device grid."
             )
 
-        fixed_mask = simulation.create_fixed_potential_mask()
+        grid_shape = simulation.grid.shape
 
-        boundary_mask = np.zeros(
-            simulation.grid.shape,
+        outer_boundary_mask = np.zeros(
+            grid_shape,
             dtype=np.bool_,
         )
-        boundary_mask[0, :] = True
-        boundary_mask[-1, :] = True
-        boundary_mask[:, 0] = True
-        boundary_mask[:, -1] = True
+        outer_boundary_mask[0, :] = True
+        outer_boundary_mask[-1, :] = True
+        outer_boundary_mask[:, 0] = True
+        outer_boundary_mask[:, -1] = True
 
-        if not np.all(fixed_mask[boundary_mask]):
+        corner_mask = np.zeros(
+            grid_shape,
+            dtype=np.bool_,
+        )
+        corner_mask[0, 0] = True
+        corner_mask[0, -1] = True
+        corner_mask[-1, 0] = True
+        corner_mask[-1, -1] = True
+
+        fixed_mask = simulation.create_fixed_potential_mask()
+
+        neumann_mask = np.zeros(
+            grid_shape,
+            dtype=np.bool_,
+        )
+
+        for boundary in simulation.neumann_boundaries:
+            boundary_mask = np.asarray(
+                boundary.mask,
+                dtype=np.bool_,
+            )
+
+            if np.any(
+                    boundary_mask & ~outer_boundary_mask
+            ):
+                raise ValueError(
+                    "PoissonSolver2D Neumann boundary conditions "
+                    "may only be applied to the outer boundary."
+                )
+
+            if np.any(
+                    boundary_mask & corner_mask
+            ):
+                raise ValueError(
+                    "PoissonSolver2D currently requires corner nodes "
+                    "to use Dirichlet boundary conditions."
+                )
+
+            if np.any(
+                    neumann_mask & boundary_mask
+            ):
+                raise ValueError(
+                    "PoissonSolver2D does not allow overlapping "
+                    "Neumann boundary conditions."
+                )
+
+            neumann_mask |= boundary_mask
+
+        if np.any(
+                fixed_mask & neumann_mask
+        ):
             raise ValueError(
-                "PoissonSolver2D requires Dirichlet boundary "
-                "conditions on every outer-boundary grid point."
+                "PoissonSolver2D does not allow a grid point to have "
+                "both Dirichlet and Neumann boundary conditions."
+            )
+
+        if not np.all(
+                fixed_mask[corner_mask]
+        ):
+            raise ValueError(
+                "PoissonSolver2D currently requires all four corner "
+                "nodes to use Dirichlet boundary conditions."
+            )
+
+        covered_boundary_mask = (
+                fixed_mask | neumann_mask
+        )
+
+        if not np.all(
+                covered_boundary_mask[
+                    outer_boundary_mask
+                ]
+        ):
+            raise ValueError(
+                "PoissonSolver2D requires every outer-boundary grid "
+                "point to have either a Dirichlet or Neumann "
+                "boundary condition."
             )
 
         relative_permittivity = (
-            simulation.device.relative_permittivity_field().values
+            simulation.device
+            .relative_permittivity_field()
+            .values
         )
 
         if relative_permittivity.shape != simulation.grid.shape:
@@ -285,56 +383,73 @@ class PoissonSolver2D:
                 "two-dimensional grid shape."
             )
 
-        if not np.all(np.isfinite(relative_permittivity)):
+        if not np.all(
+                np.isfinite(relative_permittivity)
+        ):
             raise ValueError(
                 "Relative permittivity must be finite at every grid "
                 "point."
             )
 
-        if np.any(relative_permittivity <= 0.0):
+        if np.any(
+                relative_permittivity <= 0.0
+        ):
             raise ValueError(
                 "Every grid point must have positive relative "
                 "permittivity."
             )
 
     def _assemble_system(
-        self,
-        simulation: Simulation,
+            self,
+            simulation: Simulation,
     ) -> LinearSystem:
         """
         Assemble the conservative sparse two-dimensional system.
 
-        For an unconstrained interior node ``(i, j)``:
+        Interior nodes use a conservative five-point finite-volume
+        discretisation.
 
-            -epsilon_w * (dy / dx) * phi_(i-1,j)
-            -epsilon_e * (dy / dx) * phi_(i+1,j)
-            -epsilon_s * (dx / dy) * phi_(i,j-1)
-            -epsilon_n * (dx / dy) * phi_(i,j+1)
+        Boundary control volumes have half width in the direction normal
+        to the boundary. Neumann values represent the outward-normal
+        potential derivative
 
-            + [(epsilon_w + epsilon_e) * (dy / dx)
-               + (epsilon_s + epsilon_n) * (dx / dy)] * phi_(i,j)
-
-                = rho_(i,j) * dx * dy / epsilon_0
+            d(phi) / d(n) = g.
 
         Dirichlet conditions are imposed using symmetric elimination so
-        that the final matrix remains symmetric positive definite.
+        that the resulting mixed-boundary matrix remains symmetric.
+
+        The current implementation requires corner nodes to be Dirichlet
+        constrained.
         """
 
-        number_axis_0, number_axis_1 = simulation.grid.shape
-        spacing_axis_0, spacing_axis_1 = simulation.grid.spacing
+        number_axis_0, number_axis_1 = (
+            simulation.grid.shape
+        )
 
-        number_of_unknowns = number_axis_0 * number_axis_1
+        spacing_axis_0, spacing_axis_1 = (
+            simulation.grid.spacing
+        )
+
+        number_of_unknowns = (
+                number_axis_0 * number_axis_1
+        )
 
         matrix = lil_matrix(
-            (number_of_unknowns, number_of_unknowns),
+            (
+                number_of_unknowns,
+                number_of_unknowns,
+            ),
             dtype=np.float64,
         )
+
         right_hand_side = np.zeros(
             number_of_unknowns,
             dtype=np.float64,
         )
 
-        fixed_mask = simulation.create_fixed_potential_mask()
+        fixed_mask = (
+            simulation.create_fixed_potential_mask()
+        )
 
         boundary_values = np.zeros(
             simulation.grid.shape,
@@ -346,123 +461,277 @@ class PoissonSolver2D:
                 boundary.values_on_mask()
             )
 
-        charge_density = (
-            simulation.create_charge_density_field().values
+        neumann_mask = np.zeros(
+            simulation.grid.shape,
+            dtype=np.bool_,
         )
+
+        neumann_values = np.zeros(
+            simulation.grid.shape,
+            dtype=np.float64,
+        )
+
+        for boundary in simulation.neumann_boundaries:
+            neumann_mask[boundary.mask] = True
+            neumann_values[boundary.mask] = (
+                boundary.values_on_mask()
+            )
+
+        charge_density = (
+            simulation
+            .create_charge_density_field()
+            .values
+        )
+
         relative_permittivity = (
-            simulation.device.relative_permittivity_field().values
+            simulation.device
+            .relative_permittivity_field()
+            .values
         )
 
         face_axis_0 = self._harmonic_face_values(
             relative_permittivity,
             axis=0,
         )
+
         face_axis_1 = self._harmonic_face_values(
             relative_permittivity,
             axis=1,
         )
 
-        axis_0_weight = spacing_axis_1 / spacing_axis_0
-        axis_1_weight = spacing_axis_0 / spacing_axis_1
-        cell_area = spacing_axis_0 * spacing_axis_1
+        for index_axis_0 in range(number_axis_0):
+            for index_axis_1 in range(number_axis_1):
+                if fixed_mask[
+                    index_axis_0,
+                    index_axis_1,
+                ]:
+                    continue
 
-        for index_axis_0 in range(1, number_axis_0 - 1):
-            for index_axis_1 in range(1, number_axis_1 - 1):
                 centre = self._linear_index(
                     index_axis_0,
                     index_axis_1,
                     number_axis_1,
                 )
-                west = self._linear_index(
-                    index_axis_0 - 1,
-                    index_axis_1,
-                    number_axis_1,
-                )
-                east = self._linear_index(
-                    index_axis_0 + 1,
-                    index_axis_1,
-                    number_axis_1,
-                )
-                south = self._linear_index(
-                    index_axis_0,
-                    index_axis_1 - 1,
-                    number_axis_1,
-                )
-                north = self._linear_index(
-                    index_axis_0,
-                    index_axis_1 + 1,
-                    number_axis_1,
+
+                control_width_axis_0 = (
+                    0.5 * spacing_axis_0
+                    if (
+                            index_axis_0 == 0
+                            or index_axis_0
+                            == number_axis_0 - 1
+                    )
+                    else spacing_axis_0
                 )
 
-                west_permittivity = face_axis_0[
-                    index_axis_0 - 1,
-                    index_axis_1,
-                ]
-                east_permittivity = face_axis_0[
-                    index_axis_0,
-                    index_axis_1,
-                ]
-                south_permittivity = face_axis_1[
-                    index_axis_0,
-                    index_axis_1 - 1,
-                ]
-                north_permittivity = face_axis_1[
-                    index_axis_0,
-                    index_axis_1,
-                ]
-
-                west_coefficient = (
-                    west_permittivity * axis_0_weight
-                )
-                east_coefficient = (
-                    east_permittivity * axis_0_weight
-                )
-                south_coefficient = (
-                    south_permittivity * axis_1_weight
-                )
-                north_coefficient = (
-                    north_permittivity * axis_1_weight
+                control_width_axis_1 = (
+                    0.5 * spacing_axis_1
+                    if (
+                            index_axis_1 == 0
+                            or index_axis_1
+                            == number_axis_1 - 1
+                    )
+                    else spacing_axis_1
                 )
 
-                matrix[centre, west] = -west_coefficient
-                matrix[centre, east] = -east_coefficient
-                matrix[centre, south] = -south_coefficient
-                matrix[centre, north] = -north_coefficient
-                matrix[centre, centre] = (
-                    west_coefficient
-                    + east_coefficient
-                    + south_coefficient
-                    + north_coefficient
+                diagonal_coefficient = 0.0
+
+                if index_axis_0 > 0:
+                    west = self._linear_index(
+                        index_axis_0 - 1,
+                        index_axis_1,
+                        number_axis_1,
+                    )
+
+                    west_coefficient = (
+                            face_axis_0[
+                                index_axis_0 - 1,
+                                index_axis_1,
+                            ]
+                            * control_width_axis_1
+                            / spacing_axis_0
+                    )
+
+                    matrix[
+                        centre,
+                        west,
+                    ] = -west_coefficient
+
+                    diagonal_coefficient += (
+                        west_coefficient
+                    )
+
+                if index_axis_0 < number_axis_0 - 1:
+                    east = self._linear_index(
+                        index_axis_0 + 1,
+                        index_axis_1,
+                        number_axis_1,
+                    )
+
+                    east_coefficient = (
+                            face_axis_0[
+                                index_axis_0,
+                                index_axis_1,
+                            ]
+                            * control_width_axis_1
+                            / spacing_axis_0
+                    )
+
+                    matrix[
+                        centre,
+                        east,
+                    ] = -east_coefficient
+
+                    diagonal_coefficient += (
+                        east_coefficient
+                    )
+
+                if index_axis_1 > 0:
+                    south = self._linear_index(
+                        index_axis_0,
+                        index_axis_1 - 1,
+                        number_axis_1,
+                    )
+
+                    south_coefficient = (
+                            face_axis_1[
+                                index_axis_0,
+                                index_axis_1 - 1,
+                            ]
+                            * control_width_axis_0
+                            / spacing_axis_1
+                    )
+
+                    matrix[
+                        centre,
+                        south,
+                    ] = -south_coefficient
+
+                    diagonal_coefficient += (
+                        south_coefficient
+                    )
+
+                if index_axis_1 < number_axis_1 - 1:
+                    north = self._linear_index(
+                        index_axis_0,
+                        index_axis_1 + 1,
+                        number_axis_1,
+                    )
+
+                    north_coefficient = (
+                            face_axis_1[
+                                index_axis_0,
+                                index_axis_1,
+                            ]
+                            * control_width_axis_0
+                            / spacing_axis_1
+                    )
+
+                    matrix[
+                        centre,
+                        north,
+                    ] = -north_coefficient
+
+                    diagonal_coefficient += (
+                        north_coefficient
+                    )
+
+                matrix[
+                    centre,
+                    centre,
+                ] = diagonal_coefficient
+
+                control_volume = (
+                        control_width_axis_0
+                        * control_width_axis_1
                 )
 
                 right_hand_side[centre] = (
-                    charge_density[
-                        index_axis_0,
-                        index_axis_1,
-                    ]
-                    * cell_area
-                    / VACUUM_PERMITTIVITY
+                        charge_density[
+                            index_axis_0,
+                            index_axis_1,
+                        ]
+                        * control_volume
+                        / VACUUM_PERMITTIVITY
                 )
+
+                if neumann_mask[
+                    index_axis_0,
+                    index_axis_1,
+                ]:
+                    normal_derivative = (
+                        neumann_values[
+                            index_axis_0,
+                            index_axis_1,
+                        ]
+                    )
+
+                    boundary_permittivity = (
+                        relative_permittivity[
+                            index_axis_0,
+                            index_axis_1,
+                        ]
+                    )
+
+                    if (
+                            index_axis_0 == 0
+                            or index_axis_0
+                            == number_axis_0 - 1
+                    ):
+                        right_hand_side[
+                            centre
+                        ] += (
+                                boundary_permittivity
+                                * normal_derivative
+                                * control_width_axis_1
+                        )
+
+                    if (
+                            index_axis_1 == 0
+                            or index_axis_1
+                            == number_axis_1 - 1
+                    ):
+                        right_hand_side[
+                            centre
+                        ] += (
+                                boundary_permittivity
+                                * normal_derivative
+                                * control_width_axis_0
+                        )
 
         fixed_indices = np.flatnonzero(
             fixed_mask.ravel(order="C")
         )
-        boundary_vector = boundary_values.ravel(order="C")
+
+        boundary_vector = (
+            boundary_values.ravel(order="C")
+        )
 
         for fixed_index in fixed_indices:
-            fixed_value = boundary_vector[fixed_index]
+            fixed_value = (
+                boundary_vector[fixed_index]
+            )
 
             column = (
                 matrix[:, fixed_index]
                 .toarray()
                 .ravel()
             )
-            right_hand_side -= column * fixed_value
+
+            right_hand_side -= (
+                    column * fixed_value
+            )
 
             matrix[:, fixed_index] = 0.0
             matrix[fixed_index, :] = 0.0
-            matrix[fixed_index, fixed_index] = 1.0
-            right_hand_side[fixed_index] = fixed_value
+
+            matrix[
+                fixed_index,
+                fixed_index,
+            ] = 1.0
+
+            right_hand_side[
+                fixed_index
+            ] = fixed_value
 
         return LinearSystem(
             matrix=matrix.tocsr(),

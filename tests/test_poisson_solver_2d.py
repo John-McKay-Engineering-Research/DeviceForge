@@ -28,6 +28,9 @@ from deviceforge.linalg import (
     SparseDirectSolver,
 )
 
+from deviceforge.core import Field
+VACUUM_PERMITTIVITY = 8.8541878128e-12
+
 def create_zero_boundary_simulation_2d(
     *,
     shape: tuple[int, int] = (5, 5),
@@ -1261,4 +1264,989 @@ def test_poisson_solver_2d_identity_and_jacobi_cg_agree() -> None:
         jacobi_result.potential.values,
         rtol=1.0e-10,
         atol=1.0e-12,
+    )
+
+def create_mixed_boundary_linear_simulation_2d(
+    *,
+    shape: tuple[int, int] = (21, 17),
+    spacing: tuple[float, float] = (
+        1.0e-9,
+        2.0e-9,
+    ),
+    phi_0: float = 0.25,
+    slope: float = 5.0e6,
+) -> tuple[Simulation, np.ndarray]:
+    """
+    Create a mixed Dirichlet-Neumann 2D Laplace problem with
+
+        phi(x, y) = phi_0 + slope * x.
+
+    Boundary conditions use the outward-normal derivative convention.
+    """
+
+    grid = Grid(
+        shape=shape,
+        spacing=spacing,
+        origin=(0.0, 0.0),
+    )
+
+    region = Region(
+        name="silicon",
+        grid=grid,
+        material=SILICON,
+        mask=np.ones(
+            grid.shape,
+            dtype=np.bool_,
+        ),
+    )
+
+    device = Device(
+        name="mixed_linear_device_2d",
+        grid=grid,
+        regions=(region,),
+    )
+
+    x_coordinates = grid.coordinates(0)
+
+    expected_potential = np.broadcast_to(
+        (
+            phi_0
+            + slope * x_coordinates[:, None]
+        ),
+        grid.shape,
+    ).copy()
+
+    left_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+    left_mask[0, 1:-1] = True
+
+    right_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+    right_mask[-1, 1:-1] = True
+
+    bottom_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+    bottom_mask[1:-1, 0] = True
+
+    top_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+    top_mask[1:-1, -1] = True
+
+    corner_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+    corner_mask[0, 0] = True
+    corner_mask[0, -1] = True
+    corner_mask[-1, 0] = True
+    corner_mask[-1, -1] = True
+
+    left_boundary = BoundaryCondition(
+        name="left_dirichlet",
+        grid=grid,
+        mask=left_mask,
+        condition_type=(
+            BoundaryConditionType.DIRICHLET
+        ),
+        value=phi_0,
+        units="V",
+    )
+
+    corner_boundary = BoundaryCondition(
+        name="corner_dirichlet",
+        grid=grid,
+        mask=corner_mask,
+        condition_type=(
+            BoundaryConditionType.DIRICHLET
+        ),
+        value=expected_potential,
+        units="V",
+    )
+
+    right_boundary = BoundaryCondition(
+        name="right_neumann",
+        grid=grid,
+        mask=right_mask,
+        condition_type=(
+            BoundaryConditionType.NEUMANN
+        ),
+        value=slope,
+        units="V/m",
+    )
+
+    bottom_boundary = BoundaryCondition(
+        name="bottom_neumann",
+        grid=grid,
+        mask=bottom_mask,
+        condition_type=(
+            BoundaryConditionType.NEUMANN
+        ),
+        value=0.0,
+        units="V/m",
+    )
+
+    top_boundary = BoundaryCondition(
+        name="top_neumann",
+        grid=grid,
+        mask=top_mask,
+        condition_type=(
+            BoundaryConditionType.NEUMANN
+        ),
+        value=0.0,
+        units="V/m",
+    )
+
+    simulation = Simulation(
+        name="mixed_linear_laplace_2d",
+        device=device,
+        boundary_conditions=(
+            left_boundary,
+            corner_boundary,
+            right_boundary,
+            bottom_boundary,
+            top_boundary,
+        ),
+        tolerance=1.0e-10,
+        max_iterations=10_000,
+        initial_potential=0.0,
+    )
+
+    return simulation, expected_potential
+
+def test_poisson_solver_2d_matches_mixed_linear_solution() -> None:
+    simulation, expected = (
+        create_mixed_boundary_linear_simulation_2d()
+    )
+
+    result = PoissonSolver2D().solve(
+        simulation
+    )
+
+    assert result.converged
+
+    np.testing.assert_allclose(
+        result.potential.values,
+        expected,
+        rtol=1.0e-10,
+        atol=1.0e-12,
+    )
+
+def create_mixed_boundary_linear_left_neumann_simulation_2d(
+    *,
+    shape: tuple[int, int] = (21, 17),
+    spacing: tuple[float, float] = (
+        1.0e-9,
+        2.0e-9,
+    ),
+    phi_0: float = 0.25,
+    slope: float = 5.0e6,
+) -> tuple[Simulation, np.ndarray]:
+    """
+    Create a mixed Dirichlet-Neumann 2D Laplace problem with
+
+        phi(x, y) = phi_0 + slope * x,
+
+    using a left-edge Neumann condition and right-edge Dirichlet
+    condition.
+    """
+
+    grid = Grid(
+        shape=shape,
+        spacing=spacing,
+        origin=(0.0, 0.0),
+    )
+
+    region = Region(
+        name="silicon",
+        grid=grid,
+        material=SILICON,
+        mask=np.ones(
+            grid.shape,
+            dtype=np.bool_,
+        ),
+    )
+
+    device = Device(
+        name="mixed_linear_left_neumann_device_2d",
+        grid=grid,
+        regions=(region,),
+    )
+
+    x_coordinates = grid.coordinates(0)
+
+    expected_potential = np.broadcast_to(
+        (
+            phi_0
+            + slope * x_coordinates[:, None]
+        ),
+        grid.shape,
+    ).copy()
+
+    left_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+    left_mask[0, 1:-1] = True
+
+    right_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+    right_mask[-1, 1:-1] = True
+
+    bottom_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+    bottom_mask[1:-1, 0] = True
+
+    top_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+    top_mask[1:-1, -1] = True
+
+    corner_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+    corner_mask[0, 0] = True
+    corner_mask[0, -1] = True
+    corner_mask[-1, 0] = True
+    corner_mask[-1, -1] = True
+
+    right_value = expected_potential[-1, 0]
+
+    right_boundary = BoundaryCondition(
+        name="right_dirichlet",
+        grid=grid,
+        mask=right_mask,
+        condition_type=(
+            BoundaryConditionType.DIRICHLET
+        ),
+        value=right_value,
+        units="V",
+    )
+
+    corner_boundary = BoundaryCondition(
+        name="corner_dirichlet",
+        grid=grid,
+        mask=corner_mask,
+        condition_type=(
+            BoundaryConditionType.DIRICHLET
+        ),
+        value=expected_potential,
+        units="V",
+    )
+
+    left_boundary = BoundaryCondition(
+        name="left_neumann",
+        grid=grid,
+        mask=left_mask,
+        condition_type=(
+            BoundaryConditionType.NEUMANN
+        ),
+        value=-slope,
+        units="V/m",
+    )
+
+    bottom_boundary = BoundaryCondition(
+        name="bottom_neumann",
+        grid=grid,
+        mask=bottom_mask,
+        condition_type=(
+            BoundaryConditionType.NEUMANN
+        ),
+        value=0.0,
+        units="V/m",
+    )
+
+    top_boundary = BoundaryCondition(
+        name="top_neumann",
+        grid=grid,
+        mask=top_mask,
+        condition_type=(
+            BoundaryConditionType.NEUMANN
+        ),
+        value=0.0,
+        units="V/m",
+    )
+
+    simulation = Simulation(
+        name="mixed_linear_left_neumann_laplace_2d",
+        device=device,
+        boundary_conditions=(
+            right_boundary,
+            corner_boundary,
+            left_boundary,
+            bottom_boundary,
+            top_boundary,
+        ),
+        tolerance=1.0e-10,
+        max_iterations=10_000,
+        initial_potential=0.0,
+    )
+
+    return simulation, expected_potential
+
+def test_poisson_solver_2d_matches_left_neumann_linear_solution() -> None:
+    simulation, expected = (
+        create_mixed_boundary_linear_left_neumann_simulation_2d()
+    )
+
+    result = PoissonSolver2D().solve(
+        simulation
+    )
+
+    assert result.converged
+
+    np.testing.assert_allclose(
+        result.potential.values,
+        expected,
+        rtol=1.0e-10,
+        atol=1.0e-12,
+    )
+
+def test_poisson_solver_2d_mixed_boundary_matrix_is_symmetric() -> None:
+    simulation, _ = (
+        create_mixed_boundary_linear_simulation_2d()
+    )
+
+    linear_system = PoissonSolver2D()._assemble_system(
+        simulation
+    )
+
+    matrix = linear_system.matrix.toarray()
+
+    np.testing.assert_allclose(
+        matrix,
+        matrix.T,
+        rtol=0.0,
+        atol=1.0e-14,
+    )
+
+
+def test_poisson_solver_2d_mixed_boundary_matrix_is_positive_definite() -> None:
+    simulation, _ = (
+        create_mixed_boundary_linear_simulation_2d()
+    )
+
+    linear_system = PoissonSolver2D()._assemble_system(
+        simulation
+    )
+
+    matrix = linear_system.matrix.toarray()
+
+    eigenvalues = np.linalg.eigvalsh(
+        matrix
+    )
+
+    assert np.all(
+        eigenvalues > 0.0
+    )
+
+def test_poisson_solver_2d_mixed_boundary_matrix_is_symmetric() -> None:
+    simulation, _ = (
+        create_mixed_boundary_linear_simulation_2d(
+            shape=(7, 6),
+        )
+    )
+
+    linear_system = PoissonSolver2D()._assemble_system(
+        simulation
+    )
+
+    matrix = linear_system.matrix.toarray()
+
+    np.testing.assert_allclose(
+        matrix,
+        matrix.T,
+        rtol=0.0,
+        atol=1.0e-14,
+    )
+
+
+def test_poisson_solver_2d_mixed_boundary_matrix_is_positive_definite() -> None:
+    simulation, _ = (
+        create_mixed_boundary_linear_simulation_2d(
+            shape=(7, 6),
+        )
+    )
+
+    linear_system = PoissonSolver2D()._assemble_system(
+        simulation
+    )
+
+    matrix = linear_system.matrix.toarray()
+
+    eigenvalues = np.linalg.eigvalsh(
+        matrix
+    )
+
+    assert np.all(
+        eigenvalues > 0.0
+    )
+
+def test_poisson_solver_2d_mixed_boundary_identity_cg_matches_analytical() -> None:
+    simulation, expected = (
+        create_mixed_boundary_linear_simulation_2d()
+    )
+
+    solver = PoissonSolver2D(
+        linear_solver=ConjugateGradientSolver(
+            preconditioner=IdentityPreconditioner(),
+            relative_tolerance=1.0e-12,
+            absolute_tolerance=1.0e-14,
+            max_iterations=100_000,
+            name="cg_identity_mixed",
+        )
+    )
+
+    result = solver.solve(
+        simulation
+    )
+
+    assert result.converged
+
+    np.testing.assert_allclose(
+        result.potential.values,
+        expected,
+        rtol=1.0e-9,
+        atol=1.0e-11,
+    )
+
+
+def test_poisson_solver_2d_mixed_boundary_jacobi_cg_matches_analytical() -> None:
+    simulation, expected = (
+        create_mixed_boundary_linear_simulation_2d()
+    )
+
+    solver = PoissonSolver2D(
+        linear_solver=ConjugateGradientSolver(
+            preconditioner=JacobiPreconditioner(),
+            relative_tolerance=1.0e-12,
+            absolute_tolerance=1.0e-14,
+            max_iterations=100_000,
+            name="cg_jacobi_mixed",
+        )
+    )
+
+    result = solver.solve(
+        simulation
+    )
+
+    assert result.converged
+
+    np.testing.assert_allclose(
+        result.potential.values,
+        expected,
+        rtol=1.0e-9,
+        atol=1.0e-11,
+    )
+
+def create_charged_mixed_boundary_simulation_2d(
+    *,
+    shape: tuple[int, int] = (21, 17),
+    spacing: tuple[float, float] = (
+        1.0e-9,
+        2.0e-9,
+    ),
+    charge_density_value: float = 1.0e5,
+    left_potential: float = 0.25,
+    right_neumann_value: float = 2.0e6,
+) -> tuple[Simulation, np.ndarray]:
+    """
+    Create a uniformly charged 2D Poisson problem with
+
+        phi(0, y) = left_potential
+
+    and
+
+        d(phi)/d(n) = right_neumann_value
+
+    on the right edge.
+
+    The analytical solution is independent of y.
+    """
+
+    grid = Grid(
+        shape=shape,
+        spacing=spacing,
+        origin=(0.0, 0.0),
+    )
+
+    region = Region(
+        name="silicon",
+        grid=grid,
+        material=SILICON,
+        mask=np.ones(
+            grid.shape,
+            dtype=np.bool_,
+        ),
+    )
+
+    device = Device(
+        name="charged_mixed_device_2d",
+        grid=grid,
+        regions=(region,),
+    )
+
+    charge_density = Field.full(
+        name="charge_density",
+        units="C/m^3",
+        grid=grid,
+        fill_value=charge_density_value,
+    )
+
+    x_coordinates = grid.coordinates(0)
+
+    local_x = (
+        x_coordinates
+        - x_coordinates[0]
+    )
+
+    domain_length = (
+        x_coordinates[-1]
+        - x_coordinates[0]
+    )
+
+    relative_permittivity = (
+        SILICON.relative_permittivity
+    )
+
+    curvature = (
+        charge_density_value
+        / (
+            VACUUM_PERMITTIVITY
+            * relative_permittivity
+        )
+    )
+
+    linear_coefficient = (
+        right_neumann_value
+        + curvature * domain_length
+    )
+
+    expected_1d = (
+        left_potential
+        + linear_coefficient * local_x
+        - 0.5
+        * curvature
+        * local_x**2
+    )
+
+    expected_potential = np.broadcast_to(
+        expected_1d[:, None],
+        grid.shape,
+    ).copy()
+
+    left_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+    left_mask[0, 1:-1] = True
+
+    right_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+    right_mask[-1, 1:-1] = True
+
+    bottom_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+    bottom_mask[1:-1, 0] = True
+
+    top_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+    top_mask[1:-1, -1] = True
+
+    corner_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+    corner_mask[0, 0] = True
+    corner_mask[0, -1] = True
+    corner_mask[-1, 0] = True
+    corner_mask[-1, -1] = True
+
+    left_boundary = BoundaryCondition(
+        name="left_dirichlet",
+        grid=grid,
+        mask=left_mask,
+        condition_type=(
+            BoundaryConditionType.DIRICHLET
+        ),
+        value=left_potential,
+        units="V",
+    )
+
+    corner_boundary = BoundaryCondition(
+        name="corner_dirichlet",
+        grid=grid,
+        mask=corner_mask,
+        condition_type=(
+            BoundaryConditionType.DIRICHLET
+        ),
+        value=expected_potential,
+        units="V",
+    )
+
+    right_boundary = BoundaryCondition(
+        name="right_neumann",
+        grid=grid,
+        mask=right_mask,
+        condition_type=(
+            BoundaryConditionType.NEUMANN
+        ),
+        value=right_neumann_value,
+        units="V/m",
+    )
+
+    bottom_boundary = BoundaryCondition(
+        name="bottom_neumann",
+        grid=grid,
+        mask=bottom_mask,
+        condition_type=(
+            BoundaryConditionType.NEUMANN
+        ),
+        value=0.0,
+        units="V/m",
+    )
+
+    top_boundary = BoundaryCondition(
+        name="top_neumann",
+        grid=grid,
+        mask=top_mask,
+        condition_type=(
+            BoundaryConditionType.NEUMANN
+        ),
+        value=0.0,
+        units="V/m",
+    )
+
+    simulation = Simulation(
+        name="charged_mixed_poisson_2d",
+        device=device,
+        boundary_conditions=(
+            left_boundary,
+            corner_boundary,
+            right_boundary,
+            bottom_boundary,
+            top_boundary,
+        ),
+        charge_density=charge_density,
+        tolerance=1.0e-10,
+        max_iterations=10_000,
+        initial_potential=0.0,
+    )
+
+    return simulation, expected_potential
+
+def test_poisson_solver_2d_matches_uniform_charge_solution_with_right_neumann() -> None:
+    simulation, expected = (
+        create_charged_mixed_boundary_simulation_2d()
+    )
+
+    result = PoissonSolver2D().solve(
+        simulation
+    )
+
+    assert result.converged
+
+    np.testing.assert_allclose(
+        result.potential.values,
+        expected,
+        rtol=1.0e-10,
+        atol=1.0e-12,
+    )
+
+def create_charged_mixed_boundary_left_neumann_simulation_2d(
+    *,
+    shape: tuple[int, int] = (21, 17),
+    spacing: tuple[float, float] = (
+        1.0e-9,
+        2.0e-9,
+    ),
+    charge_density_value: float = 1.0e5,
+    left_neumann_value: float = -2.0e6,
+    right_potential: float = 0.25,
+) -> tuple[Simulation, np.ndarray]:
+    """
+    Create a uniformly charged 2D Poisson problem with
+
+        d(phi)/d(n) = left_neumann_value
+
+    on the left edge and
+
+        phi(Lx, y) = right_potential
+
+    on the right edge.
+
+    The analytical solution is independent of y.
+    """
+
+    grid = Grid(
+        shape=shape,
+        spacing=spacing,
+        origin=(0.0, 0.0),
+    )
+
+    region = Region(
+        name="silicon",
+        grid=grid,
+        material=SILICON,
+        mask=np.ones(
+            grid.shape,
+            dtype=np.bool_,
+        ),
+    )
+
+    device = Device(
+        name="charged_mixed_left_neumann_device_2d",
+        grid=grid,
+        regions=(region,),
+    )
+
+    charge_density = Field.full(
+        name="charge_density",
+        units="C/m^3",
+        grid=grid,
+        fill_value=charge_density_value,
+    )
+
+    x_coordinates = grid.coordinates(0)
+
+    local_x = (
+        x_coordinates
+        - x_coordinates[0]
+    )
+
+    domain_length = (
+        x_coordinates[-1]
+        - x_coordinates[0]
+    )
+
+    relative_permittivity = (
+        SILICON.relative_permittivity
+    )
+
+    curvature = (
+        charge_density_value
+        / (
+            VACUUM_PERMITTIVITY
+            * relative_permittivity
+        )
+    )
+
+    expected_1d = (
+        right_potential
+        + left_neumann_value
+        * (
+            domain_length
+            - local_x
+        )
+        + 0.5
+        * curvature
+        * (
+            domain_length**2
+            - local_x**2
+        )
+    )
+
+    expected_potential = np.broadcast_to(
+        expected_1d[:, None],
+        grid.shape,
+    ).copy()
+
+    left_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+    left_mask[0, 1:-1] = True
+
+    right_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+    right_mask[-1, 1:-1] = True
+
+    bottom_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+    bottom_mask[1:-1, 0] = True
+
+    top_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+    top_mask[1:-1, -1] = True
+
+    corner_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+    corner_mask[0, 0] = True
+    corner_mask[0, -1] = True
+    corner_mask[-1, 0] = True
+    corner_mask[-1, -1] = True
+
+    right_boundary = BoundaryCondition(
+        name="right_dirichlet",
+        grid=grid,
+        mask=right_mask,
+        condition_type=(
+            BoundaryConditionType.DIRICHLET
+        ),
+        value=right_potential,
+        units="V",
+    )
+
+    corner_boundary = BoundaryCondition(
+        name="corner_dirichlet",
+        grid=grid,
+        mask=corner_mask,
+        condition_type=(
+            BoundaryConditionType.DIRICHLET
+        ),
+        value=expected_potential,
+        units="V",
+    )
+
+    left_boundary = BoundaryCondition(
+        name="left_neumann",
+        grid=grid,
+        mask=left_mask,
+        condition_type=(
+            BoundaryConditionType.NEUMANN
+        ),
+        value=left_neumann_value,
+        units="V/m",
+    )
+
+    bottom_boundary = BoundaryCondition(
+        name="bottom_neumann",
+        grid=grid,
+        mask=bottom_mask,
+        condition_type=(
+            BoundaryConditionType.NEUMANN
+        ),
+        value=0.0,
+        units="V/m",
+    )
+
+    top_boundary = BoundaryCondition(
+        name="top_neumann",
+        grid=grid,
+        mask=top_mask,
+        condition_type=(
+            BoundaryConditionType.NEUMANN
+        ),
+        value=0.0,
+        units="V/m",
+    )
+
+    simulation = Simulation(
+        name="charged_mixed_left_neumann_poisson_2d",
+        device=device,
+        boundary_conditions=(
+            right_boundary,
+            corner_boundary,
+            left_boundary,
+            bottom_boundary,
+            top_boundary,
+        ),
+        charge_density=charge_density,
+        tolerance=1.0e-10,
+        max_iterations=10_000,
+        initial_potential=0.0,
+    )
+
+    return simulation, expected_potential
+
+def test_poisson_solver_2d_matches_uniform_charge_solution_with_left_neumann() -> None:
+    simulation, expected = (
+        create_charged_mixed_boundary_left_neumann_simulation_2d()
+    )
+
+    result = PoissonSolver2D().solve(
+        simulation
+    )
+
+    assert result.converged
+
+    np.testing.assert_allclose(
+        result.potential.values,
+        expected,
+        rtol=1.0e-10,
+        atol=1.0e-12,
+    )
+
+def test_poisson_solver_2d_charged_mixed_identity_cg_matches_analytical() -> None:
+    simulation, expected = (
+        create_charged_mixed_boundary_simulation_2d()
+    )
+
+    solver = PoissonSolver2D(
+        linear_solver=ConjugateGradientSolver(
+            preconditioner=IdentityPreconditioner(),
+            relative_tolerance=1.0e-12,
+            absolute_tolerance=1.0e-14,
+            max_iterations=100_000,
+            name="cg_identity_charged_mixed",
+        )
+    )
+
+    result = solver.solve(
+        simulation
+    )
+
+    assert result.converged
+
+    np.testing.assert_allclose(
+        result.potential.values,
+        expected,
+        rtol=1.0e-9,
+        atol=1.0e-11,
+    )
+
+
+def test_poisson_solver_2d_charged_mixed_jacobi_cg_matches_analytical() -> None:
+    simulation, expected = (
+        create_charged_mixed_boundary_simulation_2d()
+    )
+
+    solver = PoissonSolver2D(
+        linear_solver=ConjugateGradientSolver(
+            preconditioner=JacobiPreconditioner(),
+            relative_tolerance=1.0e-12,
+            absolute_tolerance=1.0e-14,
+            max_iterations=100_000,
+            name="cg_jacobi_charged_mixed",
+        )
+    )
+
+    result = solver.solve(
+        simulation
+    )
+
+    assert result.converged
+
+    np.testing.assert_allclose(
+        result.potential.values,
+        expected,
+        rtol=1.0e-9,
+        atol=1.0e-11,
     )
