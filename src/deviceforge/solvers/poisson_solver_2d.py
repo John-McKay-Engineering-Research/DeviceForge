@@ -340,9 +340,6 @@ class PoissonSolver2D:
             simulation.grid.shape,
             dtype=np.float64,
         )
-        # updated
-        # for boundary in simulation.dirichlet_boundaries:
-            # boundary_values[boundary.mask] = boundary.value
 
         for boundary in simulation.dirichlet_boundaries:
             boundary_values[boundary.mask] = (

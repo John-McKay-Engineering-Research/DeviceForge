@@ -303,7 +303,6 @@ def test_poisson_solver_2d_rejects_one_dimensional_grid(
             simulation
         )
 
-""" removed test for now. ***
 @pytest.mark.parametrize(
     "shape",
     [
@@ -315,8 +314,54 @@ def test_poisson_solver_2d_rejects_one_dimensional_grid(
 def test_poisson_solver_2d_requires_three_points_per_axis(
     shape: tuple[int, int],
 ) -> None:
-    simulation = create_zero_boundary_simulation_2d(
+    grid = Grid(
         shape=shape,
+        spacing=(
+            1.0e-9,
+            1.0e-9,
+        ),
+        origin=(0.0, 0.0),
+    )
+
+    region = Region(
+        name="silicon",
+        grid=grid,
+        material=SILICON,
+        mask=np.ones(
+            grid.shape,
+            dtype=np.bool_,
+        ),
+    )
+
+    device = Device(
+        name="small_2d_device",
+        grid=grid,
+        regions=(region,),
+    )
+
+    boundary_mask = np.ones(
+        grid.shape,
+        dtype=np.bool_,
+    )
+
+    boundary = BoundaryCondition(
+        name="full_boundary",
+        grid=grid,
+        mask=boundary_mask,
+        condition_type=(
+            BoundaryConditionType.DIRICHLET
+        ),
+        value=0.0,
+        units="V",
+    )
+
+    simulation = Simulation(
+        name="small_2d_simulation",
+        device=device,
+        boundary_conditions=(boundary,),
+        tolerance=1.0e-10,
+        max_iterations=10_000,
+        initial_potential=0.0,
     )
 
     with pytest.raises(
@@ -326,8 +371,6 @@ def test_poisson_solver_2d_requires_three_points_per_axis(
         PoissonSolver2D().solve(
             simulation
         )
-
-"""
 def test_poisson_solver_2d_requires_complete_outer_boundary() -> None:
     simulation = (
         create_incomplete_boundary_simulation_2d()
@@ -1197,83 +1240,6 @@ def test_poisson_solver_2d_cg_records_iterative_diagnostics(
     ] == "scipy"
 
 # residual validation
-
-@pytest.mark.parametrize(
-    (
-        "preconditioner",
-        "solver_name",
-        "expected_preconditioner",
-    ),
-    [
-        (
-            IdentityPreconditioner(),
-            "cg_identity",
-            "identity",
-        ),
-        (
-            JacobiPreconditioner(),
-            "cg_jacobi",
-            "jacobi",
-        ),
-    ],
-)
-def test_poisson_solver_2d_cg_records_iterative_diagnostics(
-    preconditioner,
-    solver_name: str,
-    expected_preconditioner: str,
-) -> None:
-    simulation, _ = (
-        create_linear_potential_simulation_2d(
-            shape=(21, 17),
-        )
-    )
-
-    result = PoissonSolver2D(
-        linear_solver=ConjugateGradientSolver(
-            preconditioner=preconditioner,
-            relative_tolerance=1.0e-12,
-            absolute_tolerance=1.0e-14,
-            max_iterations=100_000,
-            name=solver_name,
-        ),
-    ).solve(
-        simulation
-    )
-
-    assert result.converged
-    assert result.iterations > 0
-
-    assert result.residual_history.size == (
-        result.iterations
-    )
-
-    assert result.final_residual is not None
-
-    assert result.metadata[
-        "linear_solver_converged"
-    ] is True
-
-    assert result.metadata[
-        "linear_solver_iterations"
-    ] == result.iterations
-
-    assert result.metadata[
-        "linear_solver_termination_reason"
-    ] == "convergence_tolerance_satisfied"
-
-    linear_metadata = result.metadata[
-        "linear_solver_metadata"
-    ]
-
-    assert linear_metadata[
-        "preconditioner"
-    ] == expected_preconditioner
-
-    assert linear_metadata[
-        "preconditioner_backend"
-    ] == "scipy"
-
-# compare both CG solutions
 
 def test_poisson_solver_2d_identity_and_jacobi_cg_agree() -> None:
     simulation, _ = (
