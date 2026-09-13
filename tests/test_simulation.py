@@ -564,3 +564,57 @@ def test_charge_density_requires_correct_units(
             boundary_conditions=(left_boundary,),
             charge_density=charge_density,
         )
+
+def test_overlapping_neumann_boundaries_with_different_values_are_allowed(
+    device_2d: Device,
+    grid_2d: Grid,
+) -> None:
+    """
+    Multiple Neumann conditions may overlap at a grid point because they
+    can represent fluxes through different boundary faces meeting at that
+    point.
+
+    Geometry-specific validation of whether such an overlap is physically
+    valid belongs to the solver.
+    """
+
+    left_mask = np.zeros(
+        grid_2d.shape,
+        dtype=bool,
+    )
+    left_mask[0, :] = True
+
+    bottom_mask = np.zeros(
+        grid_2d.shape,
+        dtype=bool,
+    )
+    bottom_mask[:, 0] = True
+
+    left = BoundaryCondition(
+        name="left_neumann",
+        grid=grid_2d,
+        mask=left_mask,
+        condition_type="neumann",
+        value=-2.0e6,
+        units="V/m",
+    )
+
+    bottom = BoundaryCondition(
+        name="bottom_neumann",
+        grid=grid_2d,
+        mask=bottom_mask,
+        condition_type="neumann",
+        value=-3.0e6,
+        units="V/m",
+    )
+
+    simulation = Simulation(
+        device=device_2d,
+        boundary_conditions=(
+            left,
+            bottom,
+        ),
+    )
+
+    assert simulation.number_of_boundary_conditions == 2
+    assert len(simulation.neumann_boundaries) == 2

@@ -153,31 +153,51 @@ class Simulation:
         """
         Reject incompatible conditions applied to the same grid points.
 
-        Identical conditions are permitted at shared corner points. Conflicting
-        values or conflicting condition types are rejected.
+        Dirichlet conditions may overlap only when their units and values agree.
+
+        Neumann conditions with matching units may overlap even when their values
+        differ. Such overlaps can represent independent outward-normal derivatives
+        on different boundary faces meeting at the same grid point. Whether a
+        particular Neumann overlap is geometrically valid is the responsibility of
+        the solver.
+
+        Boundary conditions of different types remain incompatible at overlapping
+        grid points.
         """
 
         boundaries = self.boundary_conditions
 
         for first_index, first in enumerate(boundaries):
-            for second in boundaries[first_index + 1 :]:
+            for second in boundaries[first_index + 1:]:
                 overlap = first.mask & second.mask
 
                 if not np.any(overlap):
                     continue
 
                 same_type = (
-                    first.condition_type
-                    is second.condition_type
+                        first.condition_type
+                        is second.condition_type
                 )
+
                 same_units = (
-                    first.units
-                    == second.units
+                        first.units
+                        == second.units
                 )
+
+                both_neumann = (
+                        first.condition_type
+                        is BoundaryConditionType.NEUMANN
+                        and second.condition_type
+                        is BoundaryConditionType.NEUMANN
+                )
+
+                if both_neumann and same_units:
+                    continue
 
                 first_values = first.values_at(
                     overlap
                 )
+
                 second_values = second.values_at(
                     overlap
                 )
@@ -190,9 +210,9 @@ class Simulation:
                 )
 
                 if not (
-                    same_type
-                    and same_units
-                    and same_values
+                        same_type
+                        and same_units
+                        and same_values
                 ):
                     overlap_count = int(
                         np.count_nonzero(overlap)

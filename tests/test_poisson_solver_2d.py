@@ -2250,3 +2250,966 @@ def test_poisson_solver_2d_charged_mixed_jacobi_cg_matches_analytical() -> None:
         rtol=1.0e-9,
         atol=1.0e-11,
     )
+
+def create_lower_left_neumann_corner_simulation_2d(
+    *,
+    shape: tuple[int, int] = (7, 6),
+    spacing: tuple[float, float] = (
+        1.0e-9,
+        2.0e-9,
+    ),
+    left_neumann_value: float = -2.0e6,
+    bottom_neumann_value: float = -3.0e6,
+) -> Simulation:
+    """
+    Create a 2D Laplace problem in which the lower-left corner belongs
+    to both the left and bottom Neumann boundaries.
+
+    The two Neumann conditions intentionally overlap at exactly one
+    corner node. This is the desired representation for a Neumann
+    corner because the corner has two exterior boundary faces.
+
+    The remaining outer boundary is Dirichlet constrained so that the
+    problem has a fixed potential gauge.
+    """
+
+    grid = Grid(
+        shape=shape,
+        spacing=spacing,
+        origin=(0.0, 0.0),
+    )
+
+    region = Region(
+        name="silicon",
+        grid=grid,
+        material=SILICON,
+        mask=np.ones(
+            grid.shape,
+            dtype=np.bool_,
+        ),
+    )
+
+    device = Device(
+        name="lower_left_neumann_corner_device_2d",
+        grid=grid,
+        regions=(region,),
+    )
+
+    left_neumann_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+
+    # Left edge, including the lower-left corner but excluding
+    # the upper-left corner.
+    left_neumann_mask[0, :-1] = True
+
+    bottom_neumann_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+
+    # Bottom edge, including the lower-left corner but excluding
+    # the lower-right corner.
+    bottom_neumann_mask[:-1, 0] = True
+
+    right_dirichlet_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+
+    # Entire right edge, including both right-hand corners.
+    right_dirichlet_mask[-1, :] = True
+
+    top_dirichlet_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+
+    # Top edge excluding upper-right, which is already covered by
+    # the right Dirichlet boundary.
+    top_dirichlet_mask[:-1, -1] = True
+
+    left_neumann = BoundaryCondition(
+        name="left_neumann",
+        grid=grid,
+        mask=left_neumann_mask,
+        condition_type=(
+            BoundaryConditionType.NEUMANN
+        ),
+        value=left_neumann_value,
+        units="V/m",
+    )
+
+    bottom_neumann = BoundaryCondition(
+        name="bottom_neumann",
+        grid=grid,
+        mask=bottom_neumann_mask,
+        condition_type=(
+            BoundaryConditionType.NEUMANN
+        ),
+        value=bottom_neumann_value,
+        units="V/m",
+    )
+
+    right_dirichlet = BoundaryCondition(
+        name="right_dirichlet",
+        grid=grid,
+        mask=right_dirichlet_mask,
+        condition_type=(
+            BoundaryConditionType.DIRICHLET
+        ),
+        value=0.0,
+        units="V",
+    )
+
+    top_dirichlet = BoundaryCondition(
+        name="top_dirichlet",
+        grid=grid,
+        mask=top_dirichlet_mask,
+        condition_type=(
+            BoundaryConditionType.DIRICHLET
+        ),
+        value=0.0,
+        units="V",
+    )
+
+    return Simulation(
+        name="lower_left_neumann_corner_validation",
+        device=device,
+        boundary_conditions=(
+            left_neumann,
+            bottom_neumann,
+            right_dirichlet,
+            top_dirichlet,
+        ),
+        tolerance=1.0e-10,
+        max_iterations=10_000,
+        initial_potential=0.0,
+    )
+
+def test_poisson_solver_2d_accepts_orthogonal_neumann_overlap_at_corner() -> None:
+    simulation = (
+        create_lower_left_neumann_corner_simulation_2d()
+    )
+
+    solver = PoissonSolver2D()
+
+    solver._validate_simulation(
+        simulation
+    )
+
+def test_poisson_solver_2d_rejects_corner_with_only_one_neumann_condition(
+) -> None:
+    """
+    A non-Dirichlet corner has two exterior boundary faces.
+
+    Therefore, if the corner is represented using Neumann conditions,
+    exactly two Neumann conditions are required at that corner.
+    """
+
+    base_simulation = (
+        create_lower_left_neumann_corner_simulation_2d()
+    )
+
+    grid = base_simulation.grid
+    device = base_simulation.device
+
+    left_neumann_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+
+    # Includes the lower-left corner but excludes the upper-left corner.
+    left_neumann_mask[0, :-1] = True
+
+    bottom_dirichlet_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+
+    # Exclude the lower-left corner, leaving it with only the
+    # left-edge Neumann condition.
+    bottom_dirichlet_mask[1:, 0] = True
+
+    right_dirichlet_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+
+    # Exclude lower-right because it is already covered by bottom.
+    right_dirichlet_mask[-1, 1:] = True
+
+    top_dirichlet_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+
+    # Exclude upper-right because it is already covered by right.
+    top_dirichlet_mask[:-1, -1] = True
+
+    left_neumann = BoundaryCondition(
+        name="left_neumann",
+        grid=grid,
+        mask=left_neumann_mask,
+        condition_type=(
+            BoundaryConditionType.NEUMANN
+        ),
+        value=-2.0e6,
+        units="V/m",
+    )
+
+    bottom_dirichlet = BoundaryCondition(
+        name="bottom_dirichlet",
+        grid=grid,
+        mask=bottom_dirichlet_mask,
+        condition_type=(
+            BoundaryConditionType.DIRICHLET
+        ),
+        value=0.0,
+        units="V",
+    )
+
+    right_dirichlet = BoundaryCondition(
+        name="right_dirichlet",
+        grid=grid,
+        mask=right_dirichlet_mask,
+        condition_type=(
+            BoundaryConditionType.DIRICHLET
+        ),
+        value=0.0,
+        units="V",
+    )
+
+    top_dirichlet = BoundaryCondition(
+        name="top_dirichlet",
+        grid=grid,
+        mask=top_dirichlet_mask,
+        condition_type=(
+            BoundaryConditionType.DIRICHLET
+        ),
+        value=0.0,
+        units="V",
+    )
+
+    simulation = Simulation(
+        name="incomplete_neumann_corner_validation",
+        device=device,
+        boundary_conditions=(
+            left_neumann,
+            bottom_dirichlet,
+            right_dirichlet,
+            top_dirichlet,
+        ),
+        tolerance=1.0e-10,
+        max_iterations=10_000,
+        initial_potential=0.0,
+    )
+
+    solver = PoissonSolver2D()
+
+    with pytest.raises(
+        ValueError,
+        match="exactly two Neumann",
+    ):
+        solver._validate_simulation(
+            simulation
+        )
+
+
+def test_poisson_solver_2d_rejects_neumann_overlap_away_from_corner(
+) -> None:
+    """
+    Multiple Neumann conditions may overlap at a corner, but they may
+    not overlap along the same straight boundary edge.
+    """
+
+    base_simulation = (
+        create_lower_left_neumann_corner_simulation_2d()
+    )
+
+    grid = base_simulation.grid
+    device = base_simulation.device
+
+    corner_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+
+    corner_mask[0, 0] = True
+    corner_mask[0, -1] = True
+    corner_mask[-1, 0] = True
+    corner_mask[-1, -1] = True
+
+    left_neumann_a_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+
+    # Entire interior of the left edge.
+    left_neumann_a_mask[0, 1:-1] = True
+
+    left_neumann_b_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+
+    # Deliberately overlaps the first Neumann condition at
+    # non-corner points on the same left edge.
+    left_neumann_b_mask[0, 2:-1] = True
+
+    right_dirichlet_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+    right_dirichlet_mask[-1, 1:-1] = True
+
+    bottom_dirichlet_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+    bottom_dirichlet_mask[1:-1, 0] = True
+
+    top_dirichlet_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+    top_dirichlet_mask[1:-1, -1] = True
+
+    corner_dirichlet = BoundaryCondition(
+        name="corner_dirichlet",
+        grid=grid,
+        mask=corner_mask,
+        condition_type=(
+            BoundaryConditionType.DIRICHLET
+        ),
+        value=0.0,
+        units="V",
+    )
+
+    left_neumann_a = BoundaryCondition(
+        name="left_neumann_a",
+        grid=grid,
+        mask=left_neumann_a_mask,
+        condition_type=(
+            BoundaryConditionType.NEUMANN
+        ),
+        value=-2.0e6,
+        units="V/m",
+    )
+
+    left_neumann_b = BoundaryCondition(
+        name="left_neumann_b",
+        grid=grid,
+        mask=left_neumann_b_mask,
+        condition_type=(
+            BoundaryConditionType.NEUMANN
+        ),
+        value=-3.0e6,
+        units="V/m",
+    )
+
+    right_dirichlet = BoundaryCondition(
+        name="right_dirichlet",
+        grid=grid,
+        mask=right_dirichlet_mask,
+        condition_type=(
+            BoundaryConditionType.DIRICHLET
+        ),
+        value=0.0,
+        units="V",
+    )
+
+    bottom_dirichlet = BoundaryCondition(
+        name="bottom_dirichlet",
+        grid=grid,
+        mask=bottom_dirichlet_mask,
+        condition_type=(
+            BoundaryConditionType.DIRICHLET
+        ),
+        value=0.0,
+        units="V",
+    )
+
+    top_dirichlet = BoundaryCondition(
+        name="top_dirichlet",
+        grid=grid,
+        mask=top_dirichlet_mask,
+        condition_type=(
+            BoundaryConditionType.DIRICHLET
+        ),
+        value=0.0,
+        units="V",
+    )
+
+    simulation = Simulation(
+        name="invalid_neumann_edge_overlap",
+        device=device,
+        boundary_conditions=(
+            corner_dirichlet,
+            left_neumann_a,
+            left_neumann_b,
+            right_dirichlet,
+            bottom_dirichlet,
+            top_dirichlet,
+        ),
+        tolerance=1.0e-10,
+        max_iterations=10_000,
+        initial_potential=0.0,
+    )
+
+    solver = PoissonSolver2D()
+
+    with pytest.raises(
+        ValueError,
+        match="away from corner",
+    ):
+        solver._validate_simulation(
+            simulation
+        )
+
+def test_poisson_solver_2d_corner_rhs_accumulates_independent_neumann_fluxes(
+) -> None:
+    """
+    A Neumann corner has two exterior boundary faces.
+
+    The two outward-normal derivatives must contribute independently
+    to the finite-volume right-hand side.
+    """
+
+    left_neumann_value = -2.0e6
+    bottom_neumann_value = -3.0e6
+
+    simulation = (
+        create_lower_left_neumann_corner_simulation_2d(
+            left_neumann_value=left_neumann_value,
+            bottom_neumann_value=bottom_neumann_value,
+        )
+    )
+
+    solver = PoissonSolver2D()
+
+    linear_system = solver._assemble_system(
+        simulation
+    )
+
+    spacing_axis_0, spacing_axis_1 = (
+        simulation.grid.spacing
+    )
+
+    corner_index = solver._linear_index(
+        0,
+        0,
+        simulation.grid.shape[1],
+    )
+
+    relative_permittivity = (
+        SILICON.relative_permittivity
+    )
+
+    expected_corner_rhs = (
+        relative_permittivity
+        * left_neumann_value
+        * (0.5 * spacing_axis_1)
+        + relative_permittivity
+        * bottom_neumann_value
+        * (0.5 * spacing_axis_0)
+    )
+
+    assert linear_system.right_hand_side[
+        corner_index
+    ] == pytest.approx(
+        expected_corner_rhs
+    )
+
+def create_linear_lower_left_neumann_corner_simulation_2d(
+    *,
+    shape: tuple[int, int] = (21, 17),
+    spacing: tuple[float, float] = (
+        1.0e-9,
+        2.0e-9,
+    ),
+    phi_0: float = 0.25,
+    slope_axis_0: float = 2.0e6,
+    slope_axis_1: float = 3.0e6,
+) -> tuple[Simulation, np.ndarray]:
+    """
+    Create a 2D Laplace problem with exact solution
+
+        phi(x, y)
+            = phi_0
+            + slope_axis_0 * x
+            + slope_axis_1 * y.
+
+    The lower-left corner is covered by two independent Neumann
+    conditions:
+
+        left:
+            d(phi)/d(n) = -slope_axis_0
+
+        bottom:
+            d(phi)/d(n) = -slope_axis_1
+
+    The right and top boundaries are Dirichlet constrained to the
+    analytical solution, providing the potential gauge.
+    """
+
+    grid = Grid(
+        shape=shape,
+        spacing=spacing,
+        origin=(0.0, 0.0),
+    )
+
+    region = Region(
+        name="silicon",
+        grid=grid,
+        material=SILICON,
+        mask=np.ones(
+            grid.shape,
+            dtype=np.bool_,
+        ),
+    )
+
+    device = Device(
+        name="linear_corner_neumann_device_2d",
+        grid=grid,
+        regions=(region,),
+    )
+
+    x_coordinates = grid.coordinates(0)
+    y_coordinates = grid.coordinates(1)
+
+    expected_potential = (
+        phi_0
+        + slope_axis_0 * x_coordinates[:, None]
+        + slope_axis_1 * y_coordinates[None, :]
+    )
+
+    left_neumann_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+
+    # Include lower-left, exclude upper-left because top is Dirichlet.
+    left_neumann_mask[0, :-1] = True
+
+    bottom_neumann_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+
+    # Include lower-left, exclude lower-right because right is Dirichlet.
+    bottom_neumann_mask[:-1, 0] = True
+
+    right_dirichlet_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+
+    # Entire right edge, including both right-hand corners.
+    right_dirichlet_mask[-1, :] = True
+
+    top_dirichlet_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+
+    # Exclude upper-right because right boundary already covers it.
+    top_dirichlet_mask[:-1, -1] = True
+
+    left_neumann = BoundaryCondition(
+        name="left_neumann",
+        grid=grid,
+        mask=left_neumann_mask,
+        condition_type=(
+            BoundaryConditionType.NEUMANN
+        ),
+        value=-slope_axis_0,
+        units="V/m",
+    )
+
+    bottom_neumann = BoundaryCondition(
+        name="bottom_neumann",
+        grid=grid,
+        mask=bottom_neumann_mask,
+        condition_type=(
+            BoundaryConditionType.NEUMANN
+        ),
+        value=-slope_axis_1,
+        units="V/m",
+    )
+
+    right_dirichlet = BoundaryCondition(
+        name="right_dirichlet",
+        grid=grid,
+        mask=right_dirichlet_mask,
+        condition_type=(
+            BoundaryConditionType.DIRICHLET
+        ),
+        value=expected_potential,
+        units="V",
+    )
+
+    top_dirichlet = BoundaryCondition(
+        name="top_dirichlet",
+        grid=grid,
+        mask=top_dirichlet_mask,
+        condition_type=(
+            BoundaryConditionType.DIRICHLET
+        ),
+        value=expected_potential,
+        units="V",
+    )
+
+    simulation = Simulation(
+        name="linear_lower_left_neumann_corner_2d",
+        device=device,
+        boundary_conditions=(
+            left_neumann,
+            bottom_neumann,
+            right_dirichlet,
+            top_dirichlet,
+        ),
+        tolerance=1.0e-10,
+        max_iterations=10_000,
+        initial_potential=0.0,
+    )
+
+    return simulation, expected_potential
+
+
+def test_poisson_solver_2d_matches_linear_solution_with_neumann_corner(
+) -> None:
+    simulation, expected = (
+        create_linear_lower_left_neumann_corner_simulation_2d()
+    )
+
+    result = PoissonSolver2D().solve(
+        simulation
+    )
+
+    assert result.converged
+
+    np.testing.assert_allclose(
+        result.potential.values,
+        expected,
+        rtol=1.0e-10,
+        atol=1.0e-12,
+    )
+
+def test_poisson_solver_2d_neumann_corner_matrix_is_symmetric(
+) -> None:
+    simulation, _ = (
+        create_linear_lower_left_neumann_corner_simulation_2d(
+            shape=(7, 6),
+        )
+    )
+
+    linear_system = PoissonSolver2D()._assemble_system(
+        simulation
+    )
+
+    matrix = linear_system.matrix.toarray()
+
+    np.testing.assert_allclose(
+        matrix,
+        matrix.T,
+        rtol=0.0,
+        atol=1.0e-14,
+    )
+
+
+def test_poisson_solver_2d_neumann_corner_matrix_is_positive_definite(
+) -> None:
+    simulation, _ = (
+        create_linear_lower_left_neumann_corner_simulation_2d(
+            shape=(7, 6),
+        )
+    )
+
+    linear_system = PoissonSolver2D()._assemble_system(
+        simulation
+    )
+
+    matrix = linear_system.matrix.toarray()
+
+    eigenvalues = np.linalg.eigvalsh(
+        matrix
+    )
+
+    assert np.all(
+        eigenvalues > 0.0
+    )
+
+def test_poisson_solver_2d_neumann_corner_identity_cg_matches_analytical(
+) -> None:
+    simulation, expected = (
+        create_linear_lower_left_neumann_corner_simulation_2d()
+    )
+
+    solver = PoissonSolver2D(
+        linear_solver=ConjugateGradientSolver(
+            preconditioner=IdentityPreconditioner(),
+            relative_tolerance=1.0e-12,
+            absolute_tolerance=1.0e-14,
+            max_iterations=100_000,
+            name="cg_identity_neumann_corner",
+        )
+    )
+
+    result = solver.solve(
+        simulation
+    )
+
+    assert result.converged
+
+    np.testing.assert_allclose(
+        result.potential.values,
+        expected,
+        rtol=1.0e-9,
+        atol=1.0e-11,
+    )
+
+
+def test_poisson_solver_2d_neumann_corner_jacobi_cg_matches_analytical(
+) -> None:
+    simulation, expected = (
+        create_linear_lower_left_neumann_corner_simulation_2d()
+    )
+
+    solver = PoissonSolver2D(
+        linear_solver=ConjugateGradientSolver(
+            preconditioner=JacobiPreconditioner(),
+            relative_tolerance=1.0e-12,
+            absolute_tolerance=1.0e-14,
+            max_iterations=100_000,
+            name="cg_jacobi_neumann_corner",
+        )
+    )
+
+    result = solver.solve(
+        simulation
+    )
+
+    assert result.converged
+
+    np.testing.assert_allclose(
+        result.potential.values,
+        expected,
+        rtol=1.0e-9,
+        atol=1.0e-11,
+    )
+
+def create_charged_lower_left_neumann_corner_simulation_2d(
+    *,
+    shape: tuple[int, int] = (21, 17),
+    spacing: tuple[float, float] = (
+        1.0e-9,
+        2.0e-9,
+    ),
+    charge_density_value: float = 1.0e5,
+    phi_0: float = 0.25,
+    slope_axis_0: float = 2.0e6,
+    slope_axis_1: float = 3.0e6,
+) -> tuple[Simulation, np.ndarray]:
+    """
+    Create a uniformly charged 2D Poisson problem with exact solution
+
+        phi(x, y)
+            = phi_0
+            + slope_axis_0 * x
+            + slope_axis_1 * y
+            - 0.5 * curvature_axis_0 * x**2
+            - 0.5 * curvature_axis_1 * y**2.
+
+    The total curvature satisfies
+
+        curvature_axis_0 + curvature_axis_1
+            = rho / (epsilon_0 * epsilon_r).
+
+    The lower-left corner is covered by two independent Neumann
+    boundary conditions. The right and top boundaries are
+    Dirichlet constrained to the analytical solution.
+    """
+
+    grid = Grid(
+        shape=shape,
+        spacing=spacing,
+        origin=(0.0, 0.0),
+    )
+
+    region = Region(
+        name="silicon",
+        grid=grid,
+        material=SILICON,
+        mask=np.ones(
+            grid.shape,
+            dtype=np.bool_,
+        ),
+    )
+
+    device = Device(
+        name="charged_corner_neumann_device_2d",
+        grid=grid,
+        regions=(region,),
+    )
+
+    charge_density = Field.full(
+        name="charge_density",
+        units="C/m^3",
+        grid=grid,
+        fill_value=charge_density_value,
+    )
+
+    relative_permittivity = (
+        SILICON.relative_permittivity
+    )
+
+    total_curvature = (
+        charge_density_value
+        / (
+            VACUUM_PERMITTIVITY
+            * relative_permittivity
+        )
+    )
+
+    # Deliberately distribute the curvature between both axes
+    # so that the analytical solution is genuinely two-dimensional.
+    curvature_axis_0 = (
+        0.4 * total_curvature
+    )
+
+    curvature_axis_1 = (
+        0.6 * total_curvature
+    )
+
+    x_coordinates = grid.coordinates(0)
+    y_coordinates = grid.coordinates(1)
+
+    local_x = (
+        x_coordinates
+        - x_coordinates[0]
+    )
+
+    local_y = (
+        y_coordinates
+        - y_coordinates[0]
+    )
+
+    expected_potential = (
+        phi_0
+        + slope_axis_0 * local_x[:, None]
+        + slope_axis_1 * local_y[None, :]
+        - 0.5
+        * curvature_axis_0
+        * local_x[:, None] ** 2
+        - 0.5
+        * curvature_axis_1
+        * local_y[None, :] ** 2
+    )
+
+    left_neumann_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+
+    left_neumann_mask[0, :-1] = True
+
+    bottom_neumann_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+
+    bottom_neumann_mask[:-1, 0] = True
+
+    right_dirichlet_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+
+    right_dirichlet_mask[-1, :] = True
+
+    top_dirichlet_mask = np.zeros(
+        grid.shape,
+        dtype=np.bool_,
+    )
+
+    top_dirichlet_mask[:-1, -1] = True
+
+    left_neumann = BoundaryCondition(
+        name="left_neumann",
+        grid=grid,
+        mask=left_neumann_mask,
+        condition_type=(
+            BoundaryConditionType.NEUMANN
+        ),
+        value=-slope_axis_0,
+        units="V/m",
+    )
+
+    bottom_neumann = BoundaryCondition(
+        name="bottom_neumann",
+        grid=grid,
+        mask=bottom_neumann_mask,
+        condition_type=(
+            BoundaryConditionType.NEUMANN
+        ),
+        value=-slope_axis_1,
+        units="V/m",
+    )
+
+    right_dirichlet = BoundaryCondition(
+        name="right_dirichlet",
+        grid=grid,
+        mask=right_dirichlet_mask,
+        condition_type=(
+            BoundaryConditionType.DIRICHLET
+        ),
+        value=expected_potential,
+        units="V",
+    )
+
+    top_dirichlet = BoundaryCondition(
+        name="top_dirichlet",
+        grid=grid,
+        mask=top_dirichlet_mask,
+        condition_type=(
+            BoundaryConditionType.DIRICHLET
+        ),
+        value=expected_potential,
+        units="V",
+    )
+
+    return Simulation(
+        name="charged_lower_left_neumann_corner_2d",
+        device=device,
+        boundary_conditions=(
+            left_neumann,
+            bottom_neumann,
+            right_dirichlet,
+            top_dirichlet,
+        ),
+        charge_density=charge_density,
+        tolerance=1.0e-10,
+        max_iterations=10_000,
+        initial_potential=0.0,
+    ), expected_potential
+
+def test_poisson_solver_2d_charged_neumann_corner_matches_analytical(
+) -> None:
+    simulation, expected = (
+        create_charged_lower_left_neumann_corner_simulation_2d()
+    )
+
+    result = PoissonSolver2D().solve(
+        simulation
+    )
+
+    assert result.converged
+
+    np.testing.assert_allclose(
+        result.potential.values,
+        expected,
+        rtol=1.0e-9,
+        atol=1.0e-11,
+    )

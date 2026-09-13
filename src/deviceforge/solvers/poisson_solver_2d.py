@@ -234,10 +234,18 @@ class PoissonSolver2D:
 
         in volts per metre.
 
-        The current mixed-boundary implementation requires all four corner
-        nodes to be Dirichlet constrained. Pure-Neumann problems are rejected
-        because the absolute electrostatic potential would otherwise be
-        undefined without an additional gauge condition.
+        Neumann boundary conditions must lie on a single straight outer edge.
+        Two orthogonal Neumann conditions may overlap at a corner so that the
+        two exterior faces of the corner control volume can carry independent
+        outward-normal derivatives.
+
+        Neumann overlaps away from corners are rejected. A corner that is not
+        Dirichlet constrained must be covered by exactly two Neumann boundary
+        conditions, one for each adjoining outer edge.
+
+        Pure-Neumann problems are rejected because the absolute electrostatic
+        potential would otherwise be undefined without an additional gauge
+        condition.
         """
 
         if simulation.grid.dimension != 2:
@@ -283,14 +291,43 @@ class PoissonSolver2D:
 
         grid_shape = simulation.grid.shape
 
-        outer_boundary_mask = np.zeros(
+        left_edge_mask = np.zeros(
             grid_shape,
             dtype=np.bool_,
         )
-        outer_boundary_mask[0, :] = True
-        outer_boundary_mask[-1, :] = True
-        outer_boundary_mask[:, 0] = True
-        outer_boundary_mask[:, -1] = True
+        left_edge_mask[0, :] = True
+
+        right_edge_mask = np.zeros(
+            grid_shape,
+            dtype=np.bool_,
+        )
+        right_edge_mask[-1, :] = True
+
+        bottom_edge_mask = np.zeros(
+            grid_shape,
+            dtype=np.bool_,
+        )
+        bottom_edge_mask[:, 0] = True
+
+        top_edge_mask = np.zeros(
+            grid_shape,
+            dtype=np.bool_,
+        )
+        top_edge_mask[:, -1] = True
+
+        edge_masks = (
+            left_edge_mask,
+            right_edge_mask,
+            bottom_edge_mask,
+            top_edge_mask,
+        )
+
+        outer_boundary_mask = (
+                left_edge_mask
+                | right_edge_mask
+                | bottom_edge_mask
+                | top_edge_mask
+        )
 
         corner_mask = np.zeros(
             grid_shape,
@@ -308,6 +345,11 @@ class PoissonSolver2D:
             dtype=np.bool_,
         )
 
+        neumann_count = np.zeros(
+            grid_shape,
+            dtype=np.int64,
+        )
+
         for boundary in simulation.neumann_boundaries:
             boundary_mask = np.asarray(
                 boundary.mask,
@@ -322,23 +364,26 @@ class PoissonSolver2D:
                     "may only be applied to the outer boundary."
                 )
 
-            if np.any(
-                    boundary_mask & corner_mask
-            ):
-                raise ValueError(
-                    "PoissonSolver2D currently requires corner nodes "
-                    "to use Dirichlet boundary conditions."
+            containing_edges = sum(
+                bool(
+                    np.all(
+                        ~boundary_mask
+                        | edge_mask
+                    )
                 )
+                for edge_mask in edge_masks
+            )
 
-            if np.any(
-                    neumann_mask & boundary_mask
-            ):
+            if containing_edges != 1:
                 raise ValueError(
-                    "PoissonSolver2D does not allow overlapping "
-                    "Neumann boundary conditions."
+                    "PoissonSolver2D Neumann boundary conditions must "
+                    "lie on exactly one straight outer boundary edge."
                 )
 
             neumann_mask |= boundary_mask
+            neumann_count += boundary_mask.astype(
+                np.int64
+            )
 
         if np.any(
                 fixed_mask & neumann_mask
@@ -348,13 +393,35 @@ class PoissonSolver2D:
                 "both Dirichlet and Neumann boundary conditions."
             )
 
-        if not np.all(
-                fixed_mask[corner_mask]
-        ):
+        non_corner_overlap = (
+                (neumann_count > 1)
+                & ~corner_mask
+        )
+
+        if np.any(non_corner_overlap):
             raise ValueError(
-                "PoissonSolver2D currently requires all four corner "
-                "nodes to use Dirichlet boundary conditions."
+                "PoissonSolver2D does not allow overlapping Neumann "
+                "boundary conditions away from corner nodes."
             )
+
+        for corner_index in (
+                (0, 0),
+                (0, grid_shape[1] - 1),
+                (grid_shape[0] - 1, 0),
+                (
+                        grid_shape[0] - 1,
+                        grid_shape[1] - 1,
+                ),
+        ):
+            if fixed_mask[corner_index]:
+                continue
+
+            if neumann_count[corner_index] != 2:
+                raise ValueError(
+                    "PoissonSolver2D requires a non-Dirichlet corner "
+                    "to have exactly two Neumann boundary conditions, "
+                    "one for each adjoining outer edge."
+                )
 
         covered_boundary_mask = (
                 fixed_mask | neumann_mask
@@ -410,16 +477,19 @@ class PoissonSolver2D:
         discretisation.
 
         Boundary control volumes have half width in the direction normal
-        to the boundary. Neumann values represent the outward-normal
-        potential derivative
+        to each outer boundary. Corner control volumes therefore have
+        quarter-cell area.
+
+        Neumann values represent the outward-normal potential derivative
 
             d(phi) / d(n) = g.
 
+        Neumann data are stored separately for the left, right, bottom,
+        and top boundary faces. This allows two independent Neumann
+        derivatives to contribute at a corner.
+
         Dirichlet conditions are imposed using symmetric elimination so
         that the resulting mixed-boundary matrix remains symmetric.
-
-        The current implementation requires corner nodes to be Dirichlet
-        constrained.
         """
 
         number_axis_0, number_axis_1 = (
@@ -461,21 +531,128 @@ class PoissonSolver2D:
                 boundary.values_on_mask()
             )
 
-        neumann_mask = np.zeros(
+        left_edge_mask = np.zeros(
+            simulation.grid.shape,
+            dtype=np.bool_,
+        )
+        left_edge_mask[0, :] = True
+
+        right_edge_mask = np.zeros(
+            simulation.grid.shape,
+            dtype=np.bool_,
+        )
+        right_edge_mask[-1, :] = True
+
+        bottom_edge_mask = np.zeros(
+            simulation.grid.shape,
+            dtype=np.bool_,
+        )
+        bottom_edge_mask[:, 0] = True
+
+        top_edge_mask = np.zeros(
+            simulation.grid.shape,
+            dtype=np.bool_,
+        )
+        top_edge_mask[:, -1] = True
+
+        left_neumann_mask = np.zeros(
+            simulation.grid.shape,
+            dtype=np.bool_,
+        )
+        right_neumann_mask = np.zeros(
+            simulation.grid.shape,
+            dtype=np.bool_,
+        )
+        bottom_neumann_mask = np.zeros(
+            simulation.grid.shape,
+            dtype=np.bool_,
+        )
+        top_neumann_mask = np.zeros(
             simulation.grid.shape,
             dtype=np.bool_,
         )
 
-        neumann_values = np.zeros(
+        left_neumann_values = np.zeros(
+            simulation.grid.shape,
+            dtype=np.float64,
+        )
+        right_neumann_values = np.zeros(
+            simulation.grid.shape,
+            dtype=np.float64,
+        )
+        bottom_neumann_values = np.zeros(
+            simulation.grid.shape,
+            dtype=np.float64,
+        )
+        top_neumann_values = np.zeros(
             simulation.grid.shape,
             dtype=np.float64,
         )
 
         for boundary in simulation.neumann_boundaries:
-            neumann_mask[boundary.mask] = True
-            neumann_values[boundary.mask] = (
+            boundary_mask = np.asarray(
+                boundary.mask,
+                dtype=np.bool_,
+            )
+
+            boundary_values_on_mask = (
                 boundary.values_on_mask()
             )
+
+            belongs_to_left = np.all(
+                ~boundary_mask | left_edge_mask
+            )
+
+            belongs_to_right = np.all(
+                ~boundary_mask | right_edge_mask
+            )
+
+            belongs_to_bottom = np.all(
+                ~boundary_mask | bottom_edge_mask
+            )
+
+            belongs_to_top = np.all(
+                ~boundary_mask | top_edge_mask
+            )
+
+            matching_edges = sum(
+                (
+                    bool(belongs_to_left),
+                    bool(belongs_to_right),
+                    bool(belongs_to_bottom),
+                    bool(belongs_to_top),
+                )
+            )
+
+            if matching_edges != 1:
+                raise ValueError(
+                    "PoissonSolver2D Neumann boundary conditions must "
+                    "lie on exactly one straight outer boundary edge."
+                )
+
+            if belongs_to_left:
+                left_neumann_mask[boundary_mask] = True
+                left_neumann_values[boundary_mask] = (
+                    boundary_values_on_mask
+                )
+
+            elif belongs_to_right:
+                right_neumann_mask[boundary_mask] = True
+                right_neumann_values[boundary_mask] = (
+                    boundary_values_on_mask
+                )
+
+            elif belongs_to_bottom:
+                bottom_neumann_mask[boundary_mask] = True
+                bottom_neumann_values[boundary_mask] = (
+                    boundary_values_on_mask
+                )
+
+            else:
+                top_neumann_mask[boundary_mask] = True
+                top_neumann_values[boundary_mask] = (
+                    boundary_values_on_mask
+                )
 
         charge_density = (
             simulation
@@ -654,49 +831,84 @@ class PoissonSolver2D:
                         / VACUUM_PERMITTIVITY
                 )
 
-                if neumann_mask[
+                boundary_permittivity = (
+                    relative_permittivity[
+                        index_axis_0,
+                        index_axis_1,
+                    ]
+                )
+
+                if (
+                        index_axis_0 == 0
+                        and left_neumann_mask[
                     index_axis_0,
                     index_axis_1,
-                ]:
-                    normal_derivative = (
-                        neumann_values[
-                            index_axis_0,
-                            index_axis_1,
-                        ]
+                ]
+                ):
+                    right_hand_side[
+                        centre
+                    ] += (
+                            boundary_permittivity
+                            * left_neumann_values[
+                                index_axis_0,
+                                index_axis_1,
+                            ]
+                            * control_width_axis_1
                     )
 
-                    boundary_permittivity = (
-                        relative_permittivity[
-                            index_axis_0,
-                            index_axis_1,
-                        ]
+                if (
+                        index_axis_0 == number_axis_0 - 1
+                        and right_neumann_mask[
+                    index_axis_0,
+                    index_axis_1,
+                ]
+                ):
+                    right_hand_side[
+                        centre
+                    ] += (
+                            boundary_permittivity
+                            * right_neumann_values[
+                                index_axis_0,
+                                index_axis_1,
+                            ]
+                            * control_width_axis_1
                     )
 
-                    if (
-                            index_axis_0 == 0
-                            or index_axis_0
-                            == number_axis_0 - 1
-                    ):
-                        right_hand_side[
-                            centre
-                        ] += (
-                                boundary_permittivity
-                                * normal_derivative
-                                * control_width_axis_1
-                        )
+                if (
+                        index_axis_1 == 0
+                        and bottom_neumann_mask[
+                    index_axis_0,
+                    index_axis_1,
+                ]
+                ):
+                    right_hand_side[
+                        centre
+                    ] += (
+                            boundary_permittivity
+                            * bottom_neumann_values[
+                                index_axis_0,
+                                index_axis_1,
+                            ]
+                            * control_width_axis_0
+                    )
 
-                    if (
-                            index_axis_1 == 0
-                            or index_axis_1
-                            == number_axis_1 - 1
-                    ):
-                        right_hand_side[
-                            centre
-                        ] += (
-                                boundary_permittivity
-                                * normal_derivative
-                                * control_width_axis_0
-                        )
+                if (
+                        index_axis_1 == number_axis_1 - 1
+                        and top_neumann_mask[
+                    index_axis_0,
+                    index_axis_1,
+                ]
+                ):
+                    right_hand_side[
+                        centre
+                    ] += (
+                            boundary_permittivity
+                            * top_neumann_values[
+                                index_axis_0,
+                                index_axis_1,
+                            ]
+                            * control_width_axis_0
+                    )
 
         fixed_indices = np.flatnonzero(
             fixed_mask.ravel(order="C")
