@@ -236,3 +236,81 @@ def test_magnitude_rejects_mismatched_grids() -> None:
             first,
             second,
         )
+
+def test_components_match_quadratic_analytical_field() -> None:
+    """
+    Verify second-order 2D electric-field differentiation using a
+    quadratic potential with variation and coupling along both axes.
+    """
+
+    grid = Grid(
+        shape=(13, 11),
+        spacing=(0.2, 0.35),
+        origin=(0.0, 0.0),
+    )
+
+    coordinates_axis_0 = grid.coordinates(0)
+    coordinates_axis_1 = grid.coordinates(1)
+
+    x = coordinates_axis_0[:, None]
+    y = coordinates_axis_1[None, :]
+
+    coefficient_x_squared = 1.5
+    coefficient_y_squared = -0.75
+    coefficient_xy = 0.8
+    coefficient_x = 2.0
+    coefficient_y = -3.0
+    offset = 0.4
+
+    potential_values = (
+        coefficient_x_squared * x**2
+        + coefficient_y_squared * y**2
+        + coefficient_xy * x * y
+        + coefficient_x * x
+        + coefficient_y * y
+        + offset
+    )
+
+    potential = Field(
+        name="electrostatic_potential",
+        units="V",
+        grid=grid,
+        values=potential_values,
+    )
+
+    expected_axis_0 = -(
+        2.0
+        * coefficient_x_squared
+        * x
+        + coefficient_xy * y
+        + coefficient_x
+    )
+
+    expected_axis_1 = -(
+        2.0
+        * coefficient_y_squared
+        * y
+        + coefficient_xy * x
+        + coefficient_y
+    )
+
+    (
+        electric_field_axis_0,
+        electric_field_axis_1,
+    ) = calculate_electric_field_components_2d(
+        potential
+    )
+
+    np.testing.assert_allclose(
+        electric_field_axis_0.values,
+        expected_axis_0,
+        rtol=1.0e-12,
+        atol=1.0e-12,
+    )
+
+    np.testing.assert_allclose(
+        electric_field_axis_1.values,
+        expected_axis_1,
+        rtol=1.0e-12,
+        atol=1.0e-12,
+    )

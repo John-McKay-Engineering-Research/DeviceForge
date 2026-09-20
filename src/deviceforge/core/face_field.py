@@ -13,9 +13,19 @@ class FaceField:
     """
     Scalar field defined on faces between adjacent grid nodes.
 
-    For a one-dimensional grid containing N nodes, a FaceField contains
-    N - 1 values. Face coordinates lie halfway between neighbouring
-    node coordinates.
+    A FaceField is associated with one grid axis. The field values lie on
+    faces between neighbouring nodes along that axis.
+
+    For a grid with shape
+
+        (N0, N1, ..., Nk),
+
+    a FaceField associated with axis ``a`` has shape
+
+        (N0, ..., Na - 1, ..., Nk).
+
+    For backward compatibility with the original one-dimensional
+    implementation, ``axis`` defaults to zero.
 
     Parameters
     ----------
@@ -29,13 +39,17 @@ class FaceField:
         Node-centred grid from which the face locations are derived.
 
     values:
-        One-dimensional values defined between neighbouring grid nodes.
+        Scalar values defined on faces normal to ``axis``.
+
+    axis:
+        Grid axis normal to the faces. Defaults to zero.
     """
 
     name: str
     units: str
     grid: Grid
     values: ArrayLike
+    axis: int = 0
 
     def __post_init__(self) -> None:
         """Validate and normalise the face-centred field."""
@@ -69,10 +83,18 @@ class FaceField:
                 "Face-field grid must be a Grid instance."
             )
 
-        if self.grid.dimension != 1:
+        if isinstance(self.axis, bool) or not isinstance(
+            self.axis,
+            int,
+        ):
+            raise TypeError(
+                "Face-field axis must be an integer."
+            )
+
+        if self.axis < 0 or self.axis >= self.grid.dimension:
             raise ValueError(
-                "FaceField currently supports only "
-                "one-dimensional grids."
+                f"Face-field axis {self.axis} is invalid for "
+                f"a {self.grid.dimension}D grid."
             )
 
         normalised_values = np.asarray(
@@ -80,15 +102,21 @@ class FaceField:
             dtype=np.float64,
         )
 
-        expected_shape = (
-            self.grid.shape[0] - 1,
+        expected_shape_values = list(
+            self.grid.shape
+        )
+
+        expected_shape_values[self.axis] -= 1
+
+        expected_shape = tuple(
+            expected_shape_values
         )
 
         if normalised_values.shape != expected_shape:
             raise ValueError(
                 "Face-field values must have shape "
-                f"{expected_shape}. Received "
-                f"{normalised_values.shape}."
+                f"{expected_shape} for axis {self.axis}. "
+                f"Received {normalised_values.shape}."
             )
 
         if not np.all(np.isfinite(normalised_values)):
@@ -126,7 +154,7 @@ class FaceField:
 
     @property
     def number_of_faces(self) -> int:
-        """Return the number of grid faces."""
+        """Return the number of faces represented by the field."""
 
         return self.values.size
 
@@ -151,9 +179,16 @@ class FaceField:
     def coordinates(
         self,
     ) -> NDArray[np.float64]:
-        """Return the physical coordinates of the grid faces."""
+        """
+        Return coordinates of the faces along the associated grid axis.
 
-        node_coordinates = self.grid.coordinates(0)
+        The returned one-dimensional array contains the midpoint coordinate
+        between each pair of neighbouring nodes along ``axis``.
+        """
+
+        node_coordinates = self.grid.coordinates(
+            self.axis
+        )
 
         coordinates = 0.5 * (
             node_coordinates[:-1]

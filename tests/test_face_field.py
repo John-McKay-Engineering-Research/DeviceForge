@@ -24,6 +24,7 @@ def test_create_face_field() -> None:
         ],
     )
 
+    assert field.axis == 0
     assert field.shape == (4,)
     assert field.number_of_faces == 4
     assert field.minimum == pytest.approx(1.0)
@@ -84,3 +85,161 @@ def test_face_field_values_are_immutable() -> None:
 
     with pytest.raises(ValueError):
         field.values[0] = 1.0
+
+
+def test_two_dimensional_axis_0_face_field() -> None:
+    grid = Grid(
+        shape=(5, 4),
+        spacing=(1.0, 2.0),
+    )
+
+    field = FaceField(
+        name="axis_0_face_field",
+        units="V/m",
+        grid=grid,
+        axis=0,
+        values=np.zeros((4, 4)),
+    )
+
+    assert field.axis == 0
+    assert field.shape == (4, 4)
+    assert field.number_of_faces == 16
+
+
+def test_two_dimensional_axis_1_face_field() -> None:
+    grid = Grid(
+        shape=(5, 4),
+        spacing=(1.0, 2.0),
+    )
+
+    field = FaceField(
+        name="axis_1_face_field",
+        units="V/m",
+        grid=grid,
+        axis=1,
+        values=np.zeros((5, 3)),
+    )
+
+    assert field.axis == 1
+    assert field.shape == (5, 3)
+    assert field.number_of_faces == 15
+
+
+@pytest.mark.parametrize(
+    ("axis", "expected_shape"),
+    [
+        (0, (4, 4)),
+        (1, (5, 3)),
+    ],
+)
+def test_two_dimensional_face_field_expected_shape(
+    axis: int,
+    expected_shape: tuple[int, ...],
+) -> None:
+    grid = Grid(
+        shape=(5, 4),
+        spacing=(1.0, 2.0),
+    )
+
+    field = FaceField(
+        name="face_field",
+        units="V/m",
+        grid=grid,
+        axis=axis,
+        values=np.zeros(expected_shape),
+    )
+
+    assert field.shape == expected_shape
+
+
+@pytest.mark.parametrize(
+    ("axis", "invalid_shape"),
+    [
+        (0, (5, 4)),
+        (0, (5, 3)),
+        (1, (5, 4)),
+        (1, (4, 4)),
+    ],
+)
+def test_two_dimensional_face_field_rejects_wrong_shape(
+    axis: int,
+    invalid_shape: tuple[int, ...],
+) -> None:
+    grid = Grid(
+        shape=(5, 4),
+        spacing=(1.0, 2.0),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="shape",
+    ):
+        FaceField(
+            name="invalid",
+            units="V/m",
+            grid=grid,
+            axis=axis,
+            values=np.zeros(invalid_shape),
+        )
+
+
+@pytest.mark.parametrize(
+    "axis",
+    [
+        -1,
+        2,
+    ],
+)
+def test_face_field_rejects_invalid_axis(
+    axis: int,
+) -> None:
+    grid = Grid(
+        shape=(5, 4),
+        spacing=(1.0, 2.0),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="axis",
+    ):
+        FaceField(
+            name="invalid",
+            units="V/m",
+            grid=grid,
+            axis=axis,
+            values=np.zeros((4, 4)),
+        )
+
+
+def test_two_dimensional_face_coordinates_are_midpoints() -> None:
+    grid = Grid(
+        shape=(5, 4),
+        spacing=(2.0, 3.0),
+        origin=(1.0, 10.0),
+    )
+
+    axis_0_field = FaceField(
+        name="axis_0_face_field",
+        units="V/m",
+        grid=grid,
+        axis=0,
+        values=np.zeros((4, 4)),
+    )
+
+    axis_1_field = FaceField(
+        name="axis_1_face_field",
+        units="V/m",
+        grid=grid,
+        axis=1,
+        values=np.zeros((5, 3)),
+    )
+
+    np.testing.assert_allclose(
+        axis_0_field.coordinates(),
+        [2.0, 4.0, 6.0, 8.0],
+    )
+
+    np.testing.assert_allclose(
+        axis_1_field.coordinates(),
+        [11.5, 14.5, 17.5],
+    )
