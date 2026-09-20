@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..core.field import Field
+from deviceforge.core import FaceField, Field
 
 
 def calculate_electric_field_components_2d(
@@ -96,6 +96,103 @@ def calculate_electric_field_components_2d(
         electric_field_axis_1,
     )
 
+def calculate_face_electric_field_components_2d(
+    potential: Field,
+) -> tuple[FaceField, FaceField]:
+    """
+    Calculate face-centred electric-field components from a 2D potential.
+
+    The electric field is defined by
+
+        E = -grad(phi).
+
+    The axis-0 component is evaluated on faces between neighbouring
+    nodes along grid axis 0:
+
+        E_0[i + 1/2, j]
+            = -(phi[i + 1, j] - phi[i, j]) / dx_0.
+
+    The axis-1 component is evaluated on faces between neighbouring
+    nodes along grid axis 1:
+
+        E_1[i, j + 1/2]
+            = -(phi[i, j + 1] - phi[i, j]) / dx_1.
+
+    Parameters
+    ----------
+    potential:
+        Two-dimensional node-centred electrostatic potential field
+        with units of volts.
+
+    Returns
+    -------
+    tuple[FaceField, FaceField]
+        Face-centred electric-field components along grid axes 0 and 1.
+
+        The axis-0 field has shape
+
+            (n0 - 1, n1),
+
+        and the axis-1 field has shape
+
+            (n0, n1 - 1).
+    """
+
+    if not isinstance(potential, Field):
+        raise TypeError(
+            "Potential must be a Field instance."
+        )
+
+    if potential.grid.dimension != 2:
+        raise ValueError(
+            "Face-centred 2D electric-field calculation requires "
+            "a two-dimensional potential field."
+        )
+
+    if potential.units != "V":
+        raise ValueError(
+            "Potential field must have units of volts ('V')."
+        )
+
+    spacing_axis_0 = potential.grid.spacing[0]
+    spacing_axis_1 = potential.grid.spacing[1]
+
+    electric_field_axis_0_values = -(
+        np.diff(
+            potential.values,
+            axis=0,
+        )
+        / spacing_axis_0
+    )
+
+    electric_field_axis_1_values = -(
+        np.diff(
+            potential.values,
+            axis=1,
+        )
+        / spacing_axis_1
+    )
+
+    electric_field_axis_0 = FaceField(
+        name="electric_field_axis_0_face",
+        units="V/m",
+        grid=potential.grid,
+        values=electric_field_axis_0_values,
+        axis=0,
+    )
+
+    electric_field_axis_1 = FaceField(
+        name="electric_field_axis_1_face",
+        units="V/m",
+        grid=potential.grid,
+        values=electric_field_axis_1_values,
+        axis=1,
+    )
+
+    return (
+        electric_field_axis_0,
+        electric_field_axis_1,
+    )
 
 def calculate_electric_field_magnitude_2d(
     electric_field_axis_0: Field,

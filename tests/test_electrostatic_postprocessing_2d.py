@@ -11,6 +11,7 @@ from deviceforge.postprocessing import (
     calculate_electric_field_components_2d,
     calculate_electric_field_magnitude_2d,
     calculate_electrostatic_fields_2d,
+    calculate_face_electric_field_components_2d,
 )
 
 
@@ -314,3 +315,177 @@ def test_components_match_quadratic_analytical_field() -> None:
         rtol=1.0e-12,
         atol=1.0e-12,
     )
+
+def test_face_electric_field_components_match_linear_analytical_field() -> None:
+    """
+    Verify face-centred electric-field components for a linear
+    two-dimensional potential.
+    """
+
+    grid = Grid(
+        shape=(11, 9),
+        spacing=(0.2, 0.35),
+        origin=(0.0, 0.0),
+    )
+
+    coordinates_axis_0 = grid.coordinates(0)
+    coordinates_axis_1 = grid.coordinates(1)
+
+    x = coordinates_axis_0[:, None]
+    y = coordinates_axis_1[None, :]
+
+    potential = Field(
+        name="electrostatic_potential",
+        units="V",
+        grid=grid,
+        values=2.0 * x - 3.0 * y,
+    )
+
+    (
+        electric_field_axis_0,
+        electric_field_axis_1,
+    ) = calculate_face_electric_field_components_2d(
+        potential
+    )
+
+    np.testing.assert_allclose(
+        electric_field_axis_0.values,
+        -2.0,
+        rtol=1.0e-12,
+        atol=1.0e-12,
+    )
+
+    np.testing.assert_allclose(
+        electric_field_axis_1.values,
+        3.0,
+        rtol=1.0e-12,
+        atol=1.0e-12,
+    )
+
+
+def test_face_electric_field_components_have_expected_shapes() -> None:
+    grid = Grid(
+        shape=(11, 9),
+        spacing=(0.2, 0.35),
+    )
+
+    potential = Field(
+        name="electrostatic_potential",
+        units="V",
+        grid=grid,
+        values=np.zeros(grid.shape),
+    )
+
+    (
+        electric_field_axis_0,
+        electric_field_axis_1,
+    ) = calculate_face_electric_field_components_2d(
+        potential
+    )
+
+    assert electric_field_axis_0.shape == (10, 9)
+    assert electric_field_axis_1.shape == (11, 8)
+
+    assert electric_field_axis_0.axis == 0
+    assert electric_field_axis_1.axis == 1
+
+
+def test_face_electric_field_components_preserve_grid() -> None:
+    grid = Grid(
+        shape=(11, 9),
+        spacing=(0.2, 0.35),
+    )
+
+    potential = Field(
+        name="electrostatic_potential",
+        units="V",
+        grid=grid,
+        values=np.zeros(grid.shape),
+    )
+
+    (
+        electric_field_axis_0,
+        electric_field_axis_1,
+    ) = calculate_face_electric_field_components_2d(
+        potential
+    )
+
+    assert electric_field_axis_0.grid is grid
+    assert electric_field_axis_1.grid is grid
+
+
+def test_face_electric_field_components_have_expected_names_and_units() -> None:
+    grid = Grid(
+        shape=(11, 9),
+        spacing=(0.2, 0.35),
+    )
+
+    potential = Field(
+        name="electrostatic_potential",
+        units="V",
+        grid=grid,
+        values=np.zeros(grid.shape),
+    )
+
+    (
+        electric_field_axis_0,
+        electric_field_axis_1,
+    ) = calculate_face_electric_field_components_2d(
+        potential
+    )
+
+    assert (
+        electric_field_axis_0.name
+        == "electric_field_axis_0_face"
+    )
+    assert (
+        electric_field_axis_1.name
+        == "electric_field_axis_1_face"
+    )
+
+    assert electric_field_axis_0.units == "V/m"
+    assert electric_field_axis_1.units == "V/m"
+
+
+def test_face_electric_field_components_reject_one_dimensional_field() -> None:
+    grid = Grid(
+        shape=(11,),
+        spacing=(0.2,),
+    )
+
+    potential = Field(
+        name="electrostatic_potential",
+        units="V",
+        grid=grid,
+        values=np.zeros(grid.shape),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="two-dimensional",
+    ):
+        calculate_face_electric_field_components_2d(
+            potential
+        )
+
+
+def test_face_electric_field_components_reject_wrong_units() -> None:
+    grid = Grid(
+        shape=(11, 9),
+        spacing=(0.2, 0.35),
+    )
+
+    potential = Field(
+        name="electrostatic_potential",
+        units="K",
+        grid=grid,
+        values=np.zeros(grid.shape),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="volts",
+    ):
+        calculate_face_electric_field_components_2d(
+            potential
+        )
