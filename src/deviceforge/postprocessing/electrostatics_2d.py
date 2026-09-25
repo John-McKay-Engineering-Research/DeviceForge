@@ -194,6 +194,129 @@ def calculate_face_electric_field_components_2d(
         electric_field_axis_1,
     )
 
+def calculate_face_relative_permittivity_components_2d(
+    relative_permittivity: Field,
+) -> tuple[FaceField, FaceField]:
+    """
+    Calculate harmonic face-centred relative permittivity in 2D.
+
+    For neighbouring node values along grid axis 0,
+
+        epsilon_r[i + 1/2, j]
+            = 2 * epsilon_r[i, j] * epsilon_r[i + 1, j]
+              / (
+                  epsilon_r[i, j]
+                  + epsilon_r[i + 1, j]
+              ).
+
+    For neighbouring node values along grid axis 1,
+
+        epsilon_r[i, j + 1/2]
+            = 2 * epsilon_r[i, j] * epsilon_r[i, j + 1]
+              / (
+                  epsilon_r[i, j]
+                  + epsilon_r[i, j + 1]
+              ).
+
+    Parameters
+    ----------
+    relative_permittivity:
+        Two-dimensional node-centred relative-permittivity field.
+        Values must be positive and units must be "dimensionless".
+
+    Returns
+    -------
+    tuple[FaceField, FaceField]
+        Harmonic face-centred relative permittivity along grid
+        axes 0 and 1.
+
+        The axis-0 field has shape
+
+            (n0 - 1, n1),
+
+        and the axis-1 field has shape
+
+            (n0, n1 - 1).
+    """
+
+    if not isinstance(
+        relative_permittivity,
+        Field,
+    ):
+        raise TypeError(
+            "Face-permittivity calculation requires "
+            "a Field instance."
+        )
+
+    if relative_permittivity.grid.dimension != 2:
+        raise ValueError(
+            "Face-permittivity calculation requires "
+            "a two-dimensional field."
+        )
+
+    if (
+        relative_permittivity.units
+        != "dimensionless"
+    ):
+        raise ValueError(
+            "Relative permittivity units must be "
+            "'dimensionless'."
+        )
+
+    values = relative_permittivity.values
+
+    if np.any(values <= 0.0):
+        raise ValueError(
+            "Relative permittivity values must be positive."
+        )
+
+    values_axis_0_lower = values[:-1, :]
+    values_axis_0_upper = values[1:, :]
+
+    face_values_axis_0 = (
+        2.0
+        * values_axis_0_lower
+        * values_axis_0_upper
+        / (
+            values_axis_0_lower
+            + values_axis_0_upper
+        )
+    )
+
+    values_axis_1_lower = values[:, :-1]
+    values_axis_1_upper = values[:, 1:]
+
+    face_values_axis_1 = (
+        2.0
+        * values_axis_1_lower
+        * values_axis_1_upper
+        / (
+            values_axis_1_lower
+            + values_axis_1_upper
+        )
+    )
+
+    relative_permittivity_axis_0 = FaceField(
+        name="relative_permittivity_axis_0_face",
+        units="dimensionless",
+        grid=relative_permittivity.grid,
+        values=face_values_axis_0,
+        axis=0,
+    )
+
+    relative_permittivity_axis_1 = FaceField(
+        name="relative_permittivity_axis_1_face",
+        units="dimensionless",
+        grid=relative_permittivity.grid,
+        values=face_values_axis_1,
+        axis=1,
+    )
+
+    return (
+        relative_permittivity_axis_0,
+        relative_permittivity_axis_1,
+    )
+
 def calculate_electric_field_magnitude_2d(
     electric_field_axis_0: Field,
     electric_field_axis_1: Field,

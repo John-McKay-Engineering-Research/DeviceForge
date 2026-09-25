@@ -12,7 +12,9 @@ from deviceforge.postprocessing import (
     calculate_electric_field_magnitude_2d,
     calculate_electrostatic_fields_2d,
     calculate_face_electric_field_components_2d,
+    calculate_face_relative_permittivity_components_2d,
 )
+
 
 
 def create_linear_potential_field_2d() -> tuple[
@@ -488,4 +490,252 @@ def test_face_electric_field_components_reject_wrong_units() -> None:
     ):
         calculate_face_electric_field_components_2d(
             potential
+        )
+
+def test_face_relative_permittivity_components_constant_material() -> None:
+    """
+    Verify that constant nodal relative permittivity remains constant
+    on faces along both grid axes.
+    """
+
+    grid = Grid(
+        shape=(6, 5),
+        spacing=(0.2, 0.35),
+    )
+
+    relative_permittivity = Field(
+        name="relative_permittivity",
+        units="dimensionless",
+        grid=grid,
+        values=np.full(
+            grid.shape,
+            11.7,
+        ),
+    )
+
+    (
+        relative_permittivity_axis_0,
+        relative_permittivity_axis_1,
+    ) = calculate_face_relative_permittivity_components_2d(
+        relative_permittivity
+    )
+
+    np.testing.assert_allclose(
+        relative_permittivity_axis_0.values,
+        11.7,
+        rtol=1.0e-12,
+        atol=1.0e-12,
+    )
+
+    np.testing.assert_allclose(
+        relative_permittivity_axis_1.values,
+        11.7,
+        rtol=1.0e-12,
+        atol=1.0e-12,
+    )
+
+
+def test_face_relative_permittivity_components_use_harmonic_mean() -> None:
+    """
+    Verify harmonic averaging across material interfaces along both axes.
+    """
+
+    grid = Grid(
+        shape=(4, 4),
+        spacing=(1.0, 1.0),
+    )
+
+    values = np.array(
+        [
+            [2.0, 2.0, 8.0, 8.0],
+            [2.0, 2.0, 8.0, 8.0],
+            [18.0, 18.0, 72.0, 72.0],
+            [18.0, 18.0, 72.0, 72.0],
+        ],
+        dtype=np.float64,
+    )
+
+    relative_permittivity = Field(
+        name="relative_permittivity",
+        units="dimensionless",
+        grid=grid,
+        values=values,
+    )
+
+    (
+        relative_permittivity_axis_0,
+        relative_permittivity_axis_1,
+    ) = calculate_face_relative_permittivity_components_2d(
+        relative_permittivity
+    )
+
+    expected_axis_0 = (
+        2.0
+        * values[:-1, :]
+        * values[1:, :]
+        / (
+            values[:-1, :]
+            + values[1:, :]
+        )
+    )
+
+    expected_axis_1 = (
+        2.0
+        * values[:, :-1]
+        * values[:, 1:]
+        / (
+            values[:, :-1]
+            + values[:, 1:]
+        )
+    )
+
+    np.testing.assert_allclose(
+        relative_permittivity_axis_0.values,
+        expected_axis_0,
+        rtol=1.0e-12,
+        atol=1.0e-12,
+    )
+
+    np.testing.assert_allclose(
+        relative_permittivity_axis_1.values,
+        expected_axis_1,
+        rtol=1.0e-12,
+        atol=1.0e-12,
+    )
+
+    # Explicitly verify representative material-interface values.
+    assert (
+        relative_permittivity_axis_0.values[1, 0]
+        == pytest.approx(3.6)
+    )
+
+    assert (
+        relative_permittivity_axis_1.values[0, 1]
+        == pytest.approx(3.2)
+    )
+
+
+def test_face_relative_permittivity_components_have_expected_shapes_and_axes() -> None:
+    grid = Grid(
+        shape=(6, 5),
+        spacing=(0.2, 0.35),
+    )
+
+    relative_permittivity = Field(
+        name="relative_permittivity",
+        units="dimensionless",
+        grid=grid,
+        values=np.full(
+            grid.shape,
+            11.7,
+        ),
+    )
+
+    (
+        relative_permittivity_axis_0,
+        relative_permittivity_axis_1,
+    ) = calculate_face_relative_permittivity_components_2d(
+        relative_permittivity
+    )
+
+    assert relative_permittivity_axis_0.shape == (5, 5)
+    assert relative_permittivity_axis_1.shape == (6, 4)
+
+    assert relative_permittivity_axis_0.axis == 0
+    assert relative_permittivity_axis_1.axis == 1
+
+    assert (
+        relative_permittivity_axis_0.units
+        == "dimensionless"
+    )
+    assert (
+        relative_permittivity_axis_1.units
+        == "dimensionless"
+    )
+
+
+def test_face_relative_permittivity_components_reject_one_dimensional_field() -> None:
+    grid = Grid(
+        shape=(6,),
+        spacing=(0.2,),
+    )
+
+    relative_permittivity = Field(
+        name="relative_permittivity",
+        units="dimensionless",
+        grid=grid,
+        values=np.full(
+            grid.shape,
+            11.7,
+        ),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="two-dimensional",
+    ):
+        calculate_face_relative_permittivity_components_2d(
+            relative_permittivity
+        )
+
+
+def test_face_relative_permittivity_components_reject_wrong_units() -> None:
+    grid = Grid(
+        shape=(6, 5),
+        spacing=(0.2, 0.35),
+    )
+
+    relative_permittivity = Field(
+        name="relative_permittivity",
+        units="F/m",
+        grid=grid,
+        values=np.full(
+            grid.shape,
+            11.7,
+        ),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="dimensionless",
+    ):
+        calculate_face_relative_permittivity_components_2d(
+            relative_permittivity
+        )
+
+
+@pytest.mark.parametrize(
+    "invalid_value",
+    [
+        0.0,
+        -1.0,
+    ],
+)
+def test_face_relative_permittivity_components_reject_non_positive_values(
+    invalid_value: float,
+) -> None:
+    grid = Grid(
+        shape=(6, 5),
+        spacing=(0.2, 0.35),
+    )
+
+    values = np.full(
+        grid.shape,
+        11.7,
+    )
+    values[2, 2] = invalid_value
+
+    relative_permittivity = Field(
+        name="relative_permittivity",
+        units="dimensionless",
+        grid=grid,
+        values=values,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="positive",
+    ):
+        calculate_face_relative_permittivity_components_2d(
+            relative_permittivity
         )
