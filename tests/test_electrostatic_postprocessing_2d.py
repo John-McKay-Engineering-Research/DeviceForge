@@ -19,6 +19,7 @@ from deviceforge.postprocessing import (
     calculate_face_electric_field_components_2d,
     calculate_face_relative_permittivity_components_2d,
     calculate_face_electric_displacement_components_2d,
+    calculate_face_electrostatic_fields_2d,
 )
 
 
@@ -1141,4 +1142,144 @@ def test_face_electric_displacement_components_2d_reject_non_positive_permittivi
             electric_field_axis_1,
             relative_permittivity_axis_0,
             relative_permittivity_axis_1,
+        )
+
+def test_face_electrostatic_fields_2d_matches_individual_calculations() -> None:
+    """
+    Verify that the 2D face-electrostatic convenience pipeline
+    reproduces the independently calculated face fields.
+    """
+
+    grid = Grid(
+        shape=(6, 5),
+        spacing=(0.2, 0.35),
+    )
+
+    axis_0_coordinates, axis_1_coordinates = grid.mesh()
+
+    potential = Field(
+        name="potential",
+        units="V",
+        grid=grid,
+        values=(
+            2.0 * axis_0_coordinates
+            - 3.0 * axis_1_coordinates
+        ),
+    )
+
+    relative_permittivity_values = np.where(
+        axis_0_coordinates < 0.5,
+        4.0,
+        12.0,
+    )
+
+    relative_permittivity = Field(
+        name="relative_permittivity",
+        units="dimensionless",
+        grid=grid,
+        values=relative_permittivity_values,
+    )
+
+    expected_electric_field_axis_0, expected_electric_field_axis_1 = (
+        calculate_face_electric_field_components_2d(
+            potential
+        )
+    )
+
+    (
+        expected_relative_permittivity_axis_0,
+        expected_relative_permittivity_axis_1,
+    ) = calculate_face_relative_permittivity_components_2d(
+        relative_permittivity
+    )
+
+    (
+        expected_displacement_axis_0,
+        expected_displacement_axis_1,
+    ) = calculate_face_electric_displacement_components_2d(
+        expected_electric_field_axis_0,
+        expected_electric_field_axis_1,
+        expected_relative_permittivity_axis_0,
+        expected_relative_permittivity_axis_1,
+    )
+
+    (
+        electric_field_axis_0,
+        electric_field_axis_1,
+        relative_permittivity_axis_0,
+        relative_permittivity_axis_1,
+        displacement_axis_0,
+        displacement_axis_1,
+    ) = calculate_face_electrostatic_fields_2d(
+        potential,
+        relative_permittivity,
+    )
+
+    np.testing.assert_allclose(
+        electric_field_axis_0.values,
+        expected_electric_field_axis_0.values,
+    )
+
+    np.testing.assert_allclose(
+        electric_field_axis_1.values,
+        expected_electric_field_axis_1.values,
+    )
+
+    np.testing.assert_allclose(
+        relative_permittivity_axis_0.values,
+        expected_relative_permittivity_axis_0.values,
+    )
+
+    np.testing.assert_allclose(
+        relative_permittivity_axis_1.values,
+        expected_relative_permittivity_axis_1.values,
+    )
+
+    np.testing.assert_allclose(
+        displacement_axis_0.values,
+        expected_displacement_axis_0.values,
+    )
+
+    np.testing.assert_allclose(
+        displacement_axis_1.values,
+        expected_displacement_axis_1.values,
+    )
+
+def test_face_electrostatic_fields_2d_rejects_mismatched_grids() -> None:
+    potential_grid = Grid(
+        shape=(6, 5),
+        spacing=(0.2, 0.35),
+    )
+
+    permittivity_grid = Grid(
+        shape=(6, 5),
+        spacing=(0.25, 0.35),
+    )
+
+    potential = Field(
+        name="potential",
+        units="V",
+        grid=potential_grid,
+        values=np.zeros(
+            potential_grid.shape,
+        ),
+    )
+
+    relative_permittivity = Field(
+        name="relative_permittivity",
+        units="dimensionless",
+        grid=permittivity_grid,
+        values=np.full(
+            permittivity_grid.shape,
+            11.7,
+        ),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="same grid",
+    ):
+        calculate_face_electrostatic_fields_2d(
+            potential,
+            relative_permittivity,
         )

@@ -340,6 +340,89 @@ def calculate_face_electric_displacement_components_2d(
         displacement_axis_1,
     )
 
+def calculate_face_electrostatic_fields_2d(
+    potential: Field,
+    relative_permittivity: Field,
+) -> tuple[
+    FaceField,
+    FaceField,
+    FaceField,
+    FaceField,
+    FaceField,
+    FaceField,
+]:
+    """
+    Calculate the standard face-centred electrostatic fields in 2D.
+
+    The returned fields are, in order:
+
+        electric_field_axis_0
+        electric_field_axis_1
+        relative_permittivity_axis_0
+        relative_permittivity_axis_1
+        electric_displacement_axis_0
+        electric_displacement_axis_1
+
+    Parameters
+    ----------
+    potential:
+        Two-dimensional electrostatic-potential field in volts.
+
+    relative_permittivity:
+        Two-dimensional dimensionless relative-permittivity field
+        defined on the same grid as the potential.
+
+    Returns
+    -------
+    tuple[FaceField, FaceField, FaceField, FaceField, FaceField, FaceField]
+        Face-centred electric-field, relative-permittivity, and
+        electric-displacement components along grid axes 0 and 1.
+
+    Raises
+    ------
+    ValueError
+        If potential and relative permittivity do not use the same grid.
+    """
+
+    if potential.grid != relative_permittivity.grid:
+        raise ValueError(
+            "Potential and relative permittivity must use "
+            "the same grid."
+        )
+
+    (
+        electric_field_axis_0,
+        electric_field_axis_1,
+    ) = calculate_face_electric_field_components_2d(
+        potential
+    )
+
+    (
+        relative_permittivity_axis_0,
+        relative_permittivity_axis_1,
+    ) = calculate_face_relative_permittivity_components_2d(
+        relative_permittivity
+    )
+
+    (
+        electric_displacement_axis_0,
+        electric_displacement_axis_1,
+    ) = calculate_face_electric_displacement_components_2d(
+        electric_field_axis_0,
+        electric_field_axis_1,
+        relative_permittivity_axis_0,
+        relative_permittivity_axis_1,
+    )
+
+    return (
+        electric_field_axis_0,
+        electric_field_axis_1,
+        relative_permittivity_axis_0,
+        relative_permittivity_axis_1,
+        electric_displacement_axis_0,
+        electric_displacement_axis_1,
+    )
+
 def calculate_face_relative_permittivity_components_2d(
     relative_permittivity: Field,
 ) -> tuple[FaceField, FaceField]:
