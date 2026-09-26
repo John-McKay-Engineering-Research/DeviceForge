@@ -4,6 +4,7 @@ import numpy as np
 
 from deviceforge.core import FaceField, Field
 
+from .electrostatics import VACUUM_PERMITTIVITY
 
 def calculate_electric_field_components_2d(
     potential: Field,
@@ -192,6 +193,151 @@ def calculate_face_electric_field_components_2d(
     return (
         electric_field_axis_0,
         electric_field_axis_1,
+    )
+
+def calculate_face_electric_displacement_components_2d(
+    face_electric_field_axis_0: FaceField,
+    face_electric_field_axis_1: FaceField,
+    face_relative_permittivity_axis_0: FaceField,
+    face_relative_permittivity_axis_1: FaceField,
+) -> tuple[FaceField, FaceField]:
+    """
+    Calculate face-centred electric-displacement components in 2D.
+
+    The electric displacement on each face is
+
+        D = epsilon_0 * epsilon_r * E.
+
+    Parameters
+    ----------
+    face_electric_field_axis_0:
+        Face-centred electric field along grid axis 0.
+
+    face_electric_field_axis_1:
+        Face-centred electric field along grid axis 1.
+
+    face_relative_permittivity_axis_0:
+        Face-centred relative permittivity along grid axis 0.
+
+    face_relative_permittivity_axis_1:
+        Face-centred relative permittivity along grid axis 1.
+
+    Returns
+    -------
+    tuple[FaceField, FaceField]
+        Electric-displacement components along grid axes 0 and 1,
+        in coulombs per square metre.
+    """
+
+    face_fields = (
+        face_electric_field_axis_0,
+        face_electric_field_axis_1,
+        face_relative_permittivity_axis_0,
+        face_relative_permittivity_axis_1,
+    )
+
+    if not all(
+        isinstance(face_field, FaceField)
+        for face_field in face_fields
+    ):
+        raise TypeError(
+            "Face electric-displacement calculation requires "
+            "FaceField instances."
+        )
+
+    if face_electric_field_axis_0.axis != 0:
+        raise ValueError(
+            "Axis-0 electric field must be defined on axis 0."
+        )
+
+    if face_electric_field_axis_1.axis != 1:
+        raise ValueError(
+            "Axis-1 electric field must be defined on axis 1."
+        )
+
+    if face_relative_permittivity_axis_0.axis != 0:
+        raise ValueError(
+            "Axis-0 relative permittivity must be defined on axis 0."
+        )
+
+    if face_relative_permittivity_axis_1.axis != 1:
+        raise ValueError(
+            "Axis-1 relative permittivity must be defined on axis 1."
+        )
+
+    if (
+        face_electric_field_axis_0.units != "V/m"
+        or face_electric_field_axis_1.units != "V/m"
+    ):
+        raise ValueError(
+            "Face electric-field units must be 'V/m'."
+        )
+
+    if (
+        face_relative_permittivity_axis_0.units
+        != "dimensionless"
+        or face_relative_permittivity_axis_1.units
+        != "dimensionless"
+    ):
+        raise ValueError(
+            "Face relative-permittivity units must be "
+            "'dimensionless'."
+        )
+
+    reference_grid = face_electric_field_axis_0.grid
+
+    if any(
+        face_field.grid != reference_grid
+        for face_field in face_fields[1:]
+    ):
+        raise ValueError(
+            "Face electric fields and face relative permittivities "
+            "must use the same grid."
+        )
+
+    if (
+        np.any(
+            face_relative_permittivity_axis_0.values <= 0.0
+        )
+        or np.any(
+            face_relative_permittivity_axis_1.values <= 0.0
+        )
+    ):
+        raise ValueError(
+            "Face relative-permittivity values must be positive."
+        )
+
+    displacement_axis_0_values = (
+        VACUUM_PERMITTIVITY
+        * face_relative_permittivity_axis_0.values
+        * face_electric_field_axis_0.values
+    )
+
+    displacement_axis_1_values = (
+        VACUUM_PERMITTIVITY
+        * face_relative_permittivity_axis_1.values
+        * face_electric_field_axis_1.values
+    )
+
+    displacement_axis_0 = FaceField(
+        name="electric_displacement_axis_0_face",
+        units="C/m^2",
+        grid=reference_grid,
+        values=displacement_axis_0_values,
+        axis=0,
+    )
+
+    displacement_axis_1 = FaceField(
+        name="electric_displacement_axis_1_face",
+        units="C/m^2",
+        grid=reference_grid,
+        values=displacement_axis_1_values,
+        axis=1,
+    )
+
+    return (
+        displacement_axis_0,
+        displacement_axis_1,
     )
 
 def calculate_face_relative_permittivity_components_2d(

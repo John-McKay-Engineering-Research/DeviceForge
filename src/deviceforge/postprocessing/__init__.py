@@ -24,6 +24,7 @@ from .electrostatics_2d import (
     calculate_electrostatic_fields_2d,
     calculate_face_electric_field_components_2d,
     calculate_face_relative_permittivity_components_2d,
+    calculate_face_electric_displacement_components_2d,
 )
 
 __all__ = [
@@ -43,4 +44,5 @@ __all__ = [
     "calculate_electrostatic_fields_2d",
     "calculate_face_electric_field_components_2d",
     "calculate_face_relative_permittivity_components_2d",
+    "calculate_face_electric_displacement_components_2d",
 ]

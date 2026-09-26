@@ -7,12 +7,18 @@ from deviceforge import (
     Field,
     Grid,
 )
+
+from deviceforge.core.face_field import (
+    FaceField,
+)
+
 from deviceforge.postprocessing import (
     calculate_electric_field_components_2d,
     calculate_electric_field_magnitude_2d,
     calculate_electrostatic_fields_2d,
     calculate_face_electric_field_components_2d,
     calculate_face_relative_permittivity_components_2d,
+    calculate_face_electric_displacement_components_2d,
 )
 
 
@@ -738,4 +744,401 @@ def test_face_relative_permittivity_components_reject_non_positive_values(
     ):
         calculate_face_relative_permittivity_components_2d(
             relative_permittivity
+        )
+
+def test_face_electric_displacement_components_2d() -> None:
+    grid = Grid(
+        shape=(6, 5),
+        spacing=(0.2, 0.35),
+    )
+
+    electric_field_axis_0 = FaceField(
+        name="electric_field_axis_0_face",
+        units="V/m",
+        grid=grid,
+        values=np.full(
+            (5, 5),
+            -2.0,
+        ),
+        axis=0,
+    )
+
+    electric_field_axis_1 = FaceField(
+        name="electric_field_axis_1_face",
+        units="V/m",
+        grid=grid,
+        values=np.full(
+            (6, 4),
+            3.0,
+        ),
+        axis=1,
+    )
+
+    relative_permittivity_axis_0 = FaceField(
+        name="relative_permittivity_axis_0_face",
+        units="dimensionless",
+        grid=grid,
+        values=np.full(
+            (5, 5),
+            11.7,
+        ),
+        axis=0,
+    )
+
+    relative_permittivity_axis_1 = FaceField(
+        name="relative_permittivity_axis_1_face",
+        units="dimensionless",
+        grid=grid,
+        values=np.full(
+            (6, 4),
+            11.7,
+        ),
+        axis=1,
+    )
+
+    (
+        displacement_axis_0,
+        displacement_axis_1,
+    ) = calculate_face_electric_displacement_components_2d(
+        electric_field_axis_0,
+        electric_field_axis_1,
+        relative_permittivity_axis_0,
+        relative_permittivity_axis_1,
+    )
+
+    vacuum_permittivity = 8.8541878128e-12
+
+    np.testing.assert_allclose(
+        displacement_axis_0.values,
+        vacuum_permittivity * 11.7 * -2.0,
+    )
+
+    np.testing.assert_allclose(
+        displacement_axis_1.values,
+        vacuum_permittivity * 11.7 * 3.0,
+    )
+
+
+def test_face_electric_displacement_components_2d_metadata() -> None:
+    grid = Grid(
+        shape=(6, 5),
+        spacing=(0.2, 0.35),
+    )
+
+    electric_field_axis_0 = FaceField(
+        name="electric_field_axis_0_face",
+        units="V/m",
+        grid=grid,
+        values=np.ones((5, 5)),
+        axis=0,
+    )
+
+    electric_field_axis_1 = FaceField(
+        name="electric_field_axis_1_face",
+        units="V/m",
+        grid=grid,
+        values=np.ones((6, 4)),
+        axis=1,
+    )
+
+    relative_permittivity_axis_0 = FaceField(
+        name="relative_permittivity_axis_0_face",
+        units="dimensionless",
+        grid=grid,
+        values=np.ones((5, 5)),
+        axis=0,
+    )
+
+    relative_permittivity_axis_1 = FaceField(
+        name="relative_permittivity_axis_1_face",
+        units="dimensionless",
+        grid=grid,
+        values=np.ones((6, 4)),
+        axis=1,
+    )
+
+    (
+        displacement_axis_0,
+        displacement_axis_1,
+    ) = calculate_face_electric_displacement_components_2d(
+        electric_field_axis_0,
+        electric_field_axis_1,
+        relative_permittivity_axis_0,
+        relative_permittivity_axis_1,
+    )
+
+    assert displacement_axis_0.grid == grid
+    assert displacement_axis_1.grid == grid
+
+    assert displacement_axis_0.axis == 0
+    assert displacement_axis_1.axis == 1
+
+    assert displacement_axis_0.shape == (5, 5)
+    assert displacement_axis_1.shape == (6, 4)
+
+    assert displacement_axis_0.units == "C/m^2"
+    assert displacement_axis_1.units == "C/m^2"
+
+    assert (
+        displacement_axis_0.name
+        == "electric_displacement_axis_0_face"
+    )
+    assert (
+        displacement_axis_1.name
+        == "electric_displacement_axis_1_face"
+    )
+
+def test_face_electric_displacement_components_2d_reject_wrong_electric_field_units() -> None:
+    grid = Grid(
+        shape=(6, 5),
+        spacing=(0.2, 0.35),
+    )
+
+    electric_field_axis_0 = FaceField(
+        name="electric_field_axis_0_face",
+        units="V",
+        grid=grid,
+        values=np.ones((5, 5)),
+        axis=0,
+    )
+
+    electric_field_axis_1 = FaceField(
+        name="electric_field_axis_1_face",
+        units="V/m",
+        grid=grid,
+        values=np.ones((6, 4)),
+        axis=1,
+    )
+
+    relative_permittivity_axis_0 = FaceField(
+        name="relative_permittivity_axis_0_face",
+        units="dimensionless",
+        grid=grid,
+        values=np.ones((5, 5)),
+        axis=0,
+    )
+
+    relative_permittivity_axis_1 = FaceField(
+        name="relative_permittivity_axis_1_face",
+        units="dimensionless",
+        grid=grid,
+        values=np.ones((6, 4)),
+        axis=1,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="V/m",
+    ):
+        calculate_face_electric_displacement_components_2d(
+            electric_field_axis_0,
+            electric_field_axis_1,
+            relative_permittivity_axis_0,
+            relative_permittivity_axis_1,
+        )
+
+
+def test_face_electric_displacement_components_2d_reject_wrong_permittivity_units() -> None:
+    grid = Grid(
+        shape=(6, 5),
+        spacing=(0.2, 0.35),
+    )
+
+    electric_field_axis_0 = FaceField(
+        name="electric_field_axis_0_face",
+        units="V/m",
+        grid=grid,
+        values=np.ones((5, 5)),
+        axis=0,
+    )
+
+    electric_field_axis_1 = FaceField(
+        name="electric_field_axis_1_face",
+        units="V/m",
+        grid=grid,
+        values=np.ones((6, 4)),
+        axis=1,
+    )
+
+    relative_permittivity_axis_0 = FaceField(
+        name="relative_permittivity_axis_0_face",
+        units="F/m",
+        grid=grid,
+        values=np.ones((5, 5)),
+        axis=0,
+    )
+
+    relative_permittivity_axis_1 = FaceField(
+        name="relative_permittivity_axis_1_face",
+        units="dimensionless",
+        grid=grid,
+        values=np.ones((6, 4)),
+        axis=1,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="dimensionless",
+    ):
+        calculate_face_electric_displacement_components_2d(
+            electric_field_axis_0,
+            electric_field_axis_1,
+            relative_permittivity_axis_0,
+            relative_permittivity_axis_1,
+        )
+
+
+def test_face_electric_displacement_components_2d_reject_mismatched_grids() -> None:
+    grid = Grid(
+        shape=(6, 5),
+        spacing=(0.2, 0.35),
+    )
+
+    other_grid = Grid(
+        shape=(6, 5),
+        spacing=(0.25, 0.35),
+    )
+
+    electric_field_axis_0 = FaceField(
+        name="electric_field_axis_0_face",
+        units="V/m",
+        grid=grid,
+        values=np.ones((5, 5)),
+        axis=0,
+    )
+
+    electric_field_axis_1 = FaceField(
+        name="electric_field_axis_1_face",
+        units="V/m",
+        grid=grid,
+        values=np.ones((6, 4)),
+        axis=1,
+    )
+
+    relative_permittivity_axis_0 = FaceField(
+        name="relative_permittivity_axis_0_face",
+        units="dimensionless",
+        grid=other_grid,
+        values=np.ones((5, 5)),
+        axis=0,
+    )
+
+    relative_permittivity_axis_1 = FaceField(
+        name="relative_permittivity_axis_1_face",
+        units="dimensionless",
+        grid=grid,
+        values=np.ones((6, 4)),
+        axis=1,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="same grid",
+    ):
+        calculate_face_electric_displacement_components_2d(
+            electric_field_axis_0,
+            electric_field_axis_1,
+            relative_permittivity_axis_0,
+            relative_permittivity_axis_1,
+        )
+
+def test_face_electric_displacement_components_2d_reject_incorrect_axes() -> None:
+    grid = Grid(
+        shape=(5, 5),
+        spacing=(0.2, 0.35),
+    )
+
+    electric_field_axis_0 = FaceField(
+        name="electric_field_axis_0_face",
+        units="V/m",
+        grid=grid,
+        values=np.ones((5, 4)),
+        axis=1,
+    )
+
+    electric_field_axis_1 = FaceField(
+        name="electric_field_axis_1_face",
+        units="V/m",
+        grid=grid,
+        values=np.ones((5, 4)),
+        axis=1,
+    )
+
+    relative_permittivity_axis_0 = FaceField(
+        name="relative_permittivity_axis_0_face",
+        units="dimensionless",
+        grid=grid,
+        values=np.ones((4, 5)),
+        axis=0,
+    )
+
+    relative_permittivity_axis_1 = FaceField(
+        name="relative_permittivity_axis_1_face",
+        units="dimensionless",
+        grid=grid,
+        values=np.ones((5, 4)),
+        axis=1,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="axis",
+    ):
+        calculate_face_electric_displacement_components_2d(
+            electric_field_axis_0,
+            electric_field_axis_1,
+            relative_permittivity_axis_0,
+            relative_permittivity_axis_1,
+        )
+
+def test_face_electric_displacement_components_2d_reject_non_positive_permittivity() -> None:
+    grid = Grid(
+        shape=(5, 5),
+        spacing=(0.2, 0.35),
+    )
+
+    electric_field_axis_0 = FaceField(
+        name="electric_field_axis_0_face",
+        units="V/m",
+        grid=grid,
+        values=np.ones((4, 5)),
+        axis=0,
+    )
+
+    electric_field_axis_1 = FaceField(
+        name="electric_field_axis_1_face",
+        units="V/m",
+        grid=grid,
+        values=np.ones((5, 4)),
+        axis=1,
+    )
+
+    permittivity_axis_0_values = np.ones((4, 5))
+    permittivity_axis_0_values[2, 2] = 0.0
+
+    relative_permittivity_axis_0 = FaceField(
+        name="relative_permittivity_axis_0_face",
+        units="dimensionless",
+        grid=grid,
+        values=permittivity_axis_0_values,
+        axis=0,
+    )
+
+    relative_permittivity_axis_1 = FaceField(
+        name="relative_permittivity_axis_1_face",
+        units="dimensionless",
+        grid=grid,
+        values=np.ones((5, 4)),
+        axis=1,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="positive",
+    ):
+        calculate_face_electric_displacement_components_2d(
+            electric_field_axis_0,
+            electric_field_axis_1,
+            relative_permittivity_axis_0,
+            relative_permittivity_axis_1,
         )
