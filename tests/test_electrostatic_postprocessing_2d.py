@@ -26,6 +26,10 @@ from deviceforge.postprocessing import (
     calculate_face_electrostatic_energy_density_components_2d,
 )
 
+from deviceforge.postprocessing import (
+    calculate_total_electrostatic_energy_2d,
+)
+
 def create_linear_potential_field_2d() -> tuple[
     Field,
     float,
@@ -1598,4 +1602,279 @@ def test_face_electrostatic_energy_density_components_2d_rejects_mismatched_grid
             electric_field_axis_1,
             electric_displacement_axis_0,
             electric_displacement_axis_1,
+        )
+
+def test_total_electrostatic_energy_2d_uniform_axis_0() -> None:
+    grid = Grid(
+        shape=(5, 4),
+        spacing=(0.25, 0.5),
+    )
+
+    energy_density_axis_0 = FaceField(
+        name="electrostatic_energy_density_axis_0_face",
+        units="J/m^3",
+        grid=grid,
+        values=np.full(
+            (4, 4),
+            2.0,
+        ),
+        axis=0,
+    )
+
+    energy_density_axis_1 = FaceField(
+        name="electrostatic_energy_density_axis_1_face",
+        units="J/m^3",
+        grid=grid,
+        values=np.zeros(
+            (5, 3),
+        ),
+        axis=1,
+    )
+
+    total_energy = (
+        calculate_total_electrostatic_energy_2d(
+            energy_density_axis_0,
+            energy_density_axis_1,
+        )
+    )
+
+    domain_length_axis_0 = (
+        (grid.shape[0] - 1)
+        * grid.spacing[0]
+    )
+
+    domain_length_axis_1 = (
+        (grid.shape[1] - 1)
+        * grid.spacing[1]
+    )
+
+    expected_energy = (
+        2.0
+        * domain_length_axis_0
+        * domain_length_axis_1
+    )
+
+    np.testing.assert_allclose(
+        total_energy,
+        expected_energy,
+        rtol=1.0e-14,
+        atol=1.0e-14,
+    )
+
+def test_total_electrostatic_energy_2d_uniform_axis_1() -> None:
+    grid = Grid(
+        shape=(5, 4),
+        spacing=(0.25, 0.5),
+    )
+
+    energy_density_axis_0 = FaceField(
+        name="electrostatic_energy_density_axis_0_face",
+        units="J/m^3",
+        grid=grid,
+        values=np.zeros(
+            (4, 4),
+        ),
+        axis=0,
+    )
+
+    energy_density_axis_1 = FaceField(
+        name="electrostatic_energy_density_axis_1_face",
+        units="J/m^3",
+        grid=grid,
+        values=np.full(
+            (5, 3),
+            3.0,
+        ),
+        axis=1,
+    )
+
+    total_energy = (
+        calculate_total_electrostatic_energy_2d(
+            energy_density_axis_0,
+            energy_density_axis_1,
+        )
+    )
+
+    domain_length_axis_0 = (
+        (grid.shape[0] - 1)
+        * grid.spacing[0]
+    )
+
+    domain_length_axis_1 = (
+        (grid.shape[1] - 1)
+        * grid.spacing[1]
+    )
+
+    expected_energy = (
+        3.0
+        * domain_length_axis_0
+        * domain_length_axis_1
+    )
+
+    np.testing.assert_allclose(
+        total_energy,
+        expected_energy,
+        rtol=1.0e-14,
+        atol=1.0e-14,
+    )
+
+def test_total_electrostatic_energy_2d_uniform_both_components() -> None:
+    grid = Grid(
+        shape=(5, 4),
+        spacing=(0.25, 0.5),
+    )
+
+    energy_density_axis_0 = FaceField(
+        name="electrostatic_energy_density_axis_0_face",
+        units="J/m^3",
+        grid=grid,
+        values=np.full(
+            (4, 4),
+            2.0,
+        ),
+        axis=0,
+    )
+
+    energy_density_axis_1 = FaceField(
+        name="electrostatic_energy_density_axis_1_face",
+        units="J/m^3",
+        grid=grid,
+        values=np.full(
+            (5, 3),
+            3.0,
+        ),
+        axis=1,
+    )
+
+    total_energy = (
+        calculate_total_electrostatic_energy_2d(
+            energy_density_axis_0,
+            energy_density_axis_1,
+        )
+    )
+
+    domain_length_axis_0 = (
+        (grid.shape[0] - 1)
+        * grid.spacing[0]
+    )
+
+    domain_length_axis_1 = (
+        (grid.shape[1] - 1)
+        * grid.spacing[1]
+    )
+
+    expected_energy = (
+        (2.0 + 3.0)
+        * domain_length_axis_0
+        * domain_length_axis_1
+    )
+
+    np.testing.assert_allclose(
+        total_energy,
+        expected_energy,
+        rtol=1.0e-14,
+        atol=1.0e-14,
+    )
+
+def test_total_electrostatic_energy_2d_rejects_mismatched_grids(
+) -> None:
+    grid = Grid(
+        shape=(3, 3),
+        spacing=(1.0, 1.0),
+    )
+
+    other_grid = Grid(
+        shape=(3, 3),
+        spacing=(2.0, 1.0),
+    )
+
+    energy_density_axis_0 = FaceField(
+        name="electrostatic_energy_density_axis_0_face",
+        units="J/m^3",
+        grid=grid,
+        values=np.ones(
+            (2, 3),
+        ),
+        axis=0,
+    )
+
+    energy_density_axis_1 = FaceField(
+        name="electrostatic_energy_density_axis_1_face",
+        units="J/m^3",
+        grid=other_grid,
+        values=np.ones(
+            (3, 2),
+        ),
+        axis=1,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="must use the same grid",
+    ):
+        calculate_total_electrostatic_energy_2d(
+            energy_density_axis_0,
+            energy_density_axis_1,
+        )
+
+def test_total_electrostatic_energy_2d_rejects_wrong_units() -> None:
+    grid = Grid(
+        shape=(3, 3),
+        spacing=(1.0, 1.0),
+    )
+
+    energy_density_axis_0 = FaceField(
+        name="electrostatic_energy_density_axis_0_face",
+        units="J/m^2",
+        grid=grid,
+        values=np.ones((2, 3)),
+        axis=0,
+    )
+
+    energy_density_axis_1 = FaceField(
+        name="electrostatic_energy_density_axis_1_face",
+        units="J/m^3",
+        grid=grid,
+        values=np.ones((3, 2)),
+        axis=1,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="energy_density_axis_0 must have units",
+    ):
+        calculate_total_electrostatic_energy_2d(
+            energy_density_axis_0,
+            energy_density_axis_1,
+        )
+
+def test_total_electrostatic_energy_2d_rejects_wrong_axis() -> None:
+    grid = Grid(
+        shape=(3, 3),
+        spacing=(1.0, 1.0),
+    )
+
+    energy_density_axis_0 = FaceField(
+        name="electrostatic_energy_density_axis_0_face",
+        units="J/m^3",
+        grid=grid,
+        values=np.ones((3, 2)),
+        axis=1,
+    )
+
+    energy_density_axis_1 = FaceField(
+        name="electrostatic_energy_density_axis_1_face",
+        units="J/m^3",
+        grid=grid,
+        values=np.ones((3, 2)),
+        axis=1,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="energy_density_axis_0 must be defined",
+    ):
+        calculate_total_electrostatic_energy_2d(
+            energy_density_axis_0,
+            energy_density_axis_1,
         )

@@ -790,3 +790,127 @@ def calculate_face_electrostatic_energy_density_components_2d(
         energy_density_axis_0,
         energy_density_axis_1,
     )
+
+def calculate_total_electrostatic_energy_2d(
+    energy_density_axis_0: FaceField,
+    energy_density_axis_1: FaceField,
+) -> float:
+    """
+    Integrate face-centred electrostatic energy density over a 2D domain.
+
+    The returned value is electrostatic energy per unit out-of-plane
+    depth, with units of J/m.
+
+    The electrostatic energy density is decomposed into its Cartesian
+    contributions,
+
+        u = u_0 + u_1,
+
+    where u_0 is defined on axis-0 faces and u_1 is defined on
+    axis-1 faces.
+
+    Each component is integrated on its natural staggered grid.
+    Along the direction normal to a face family, the faces span the
+    complete physical intervals between neighbouring nodes. Along
+    the transverse direction, trapezoidal weights are used so that
+    boundary nodes contribute half of the corresponding grid spacing.
+    """
+
+    if not isinstance(
+        energy_density_axis_0,
+        FaceField,
+    ) or not isinstance(
+        energy_density_axis_1,
+        FaceField,
+    ):
+        raise TypeError(
+            "Electrostatic energy-density components must "
+            "be FaceField objects."
+        )
+
+    if energy_density_axis_0.axis != 0:
+        raise ValueError(
+            "energy_density_axis_0 must be defined "
+            "on axis-0 faces."
+        )
+
+    if energy_density_axis_1.axis != 1:
+        raise ValueError(
+            "energy_density_axis_1 must be defined "
+            "on axis-1 faces."
+        )
+
+    if energy_density_axis_0.units != "J/m^3":
+        raise ValueError(
+            "energy_density_axis_0 must have units 'J/m^3'."
+        )
+
+    if energy_density_axis_1.units != "J/m^3":
+        raise ValueError(
+            "energy_density_axis_1 must have units 'J/m^3'."
+        )
+
+    if (
+        energy_density_axis_0.grid
+        != energy_density_axis_1.grid
+    ):
+        raise ValueError(
+            "Electrostatic energy-density components "
+            "must use the same grid."
+        )
+
+    grid = energy_density_axis_0.grid
+
+    if grid.dimension != 2:
+        raise ValueError(
+            "Two-dimensional electrostatic-energy integration "
+            "requires a two-dimensional grid."
+        )
+
+    spacing_axis_0, spacing_axis_1 = grid.spacing
+    number_axis_0, number_axis_1 = grid.shape
+
+    transverse_weights_axis_1 = np.full(
+        number_axis_1,
+        spacing_axis_1,
+        dtype=np.float64,
+    )
+
+    transverse_weights_axis_1[0] *= 0.5
+    transverse_weights_axis_1[-1] *= 0.5
+
+    transverse_weights_axis_0 = np.full(
+        number_axis_0,
+        spacing_axis_0,
+        dtype=np.float64,
+    )
+
+    transverse_weights_axis_0[0] *= 0.5
+    transverse_weights_axis_0[-1] *= 0.5
+
+    total_energy_axis_0 = (
+        spacing_axis_0
+        * np.sum(
+            energy_density_axis_0.values
+            * transverse_weights_axis_1[
+                np.newaxis,
+                :
+            ]
+        )
+    )
+
+    total_energy_axis_1 = (
+        spacing_axis_1
+        * np.sum(
+            energy_density_axis_1.values
+            * transverse_weights_axis_0[
+                :,
+                np.newaxis,
+            ]
+        )
+    )
+
+    return float(
+        total_energy_axis_0
+        + total_energy_axis_1
+    )
