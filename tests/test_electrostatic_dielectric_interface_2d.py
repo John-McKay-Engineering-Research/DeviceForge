@@ -9,10 +9,17 @@ from deviceforge.core.boundary import (
 )
 from deviceforge.core.simulation import Simulation
 from deviceforge.physics.materials import Material
+
 from deviceforge.postprocessing import (
+    calculate_face_electrostatic_energy_density_components_2d,
     calculate_face_electrostatic_fields_2d,
+    calculate_total_electrostatic_energy_2d,
 )
+
 from deviceforge.solvers import PoissonSolver2D
+
+VACUUM_PERMITTIVITY = 8.8541878128e-12
+
 
 def create_dielectric_interface_simulation_2d() -> Simulation:
     """
@@ -418,4 +425,240 @@ def test_dielectric_interface_2d_reports_conservation_diagnostics() -> None:
         3.0,
         rtol=1.0e-10,
         atol=1.0e-12,
+    )
+
+def test_dielectric_interface_2d_matches_analytical_stored_energy(
+) -> None:
+    """
+    Verify the complete 2D electrostatic-energy pipeline against the
+    analytical discrete series-capacitor energy.
+
+    The analytical reference is constructed directly from the known
+    face permittivities, grid spacing, domain width, and applied
+    potential difference:
+
+        C' = epsilon_0 * L_transverse
+             / sum(delta_x / epsilon_r_face)
+
+        U' = 0.5 * C' * delta_V**2
+
+    where C' is capacitance per unit out-of-plane depth and U' is
+    electrostatic energy per unit out-of-plane depth.
+    """
+
+    simulation = create_dielectric_interface_simulation_2d()
+
+    result = PoissonSolver2D().solve(
+        simulation
+    )
+
+    assert result.converged
+
+    relative_permittivity = (
+        simulation.device.relative_permittivity_field()
+    )
+
+    (
+        electric_field_axis_0,
+        electric_field_axis_1,
+        face_relative_permittivity_axis_0,
+        _,
+        displacement_axis_0,
+        displacement_axis_1,
+    ) = calculate_face_electrostatic_fields_2d(
+        result.potential,
+        relative_permittivity,
+    )
+
+    (
+        energy_density_axis_0,
+        energy_density_axis_1,
+    ) = (
+        calculate_face_electrostatic_energy_density_components_2d(
+            electric_field_axis_0,
+            electric_field_axis_1,
+            displacement_axis_0,
+            displacement_axis_1,
+        )
+    )
+
+    numerical_energy = (
+        calculate_total_electrostatic_energy_2d(
+            energy_density_axis_0,
+            energy_density_axis_1,
+        )
+    )
+
+    grid = simulation.device.grid
+
+    spacing_axis_0 = grid.spacing[0]
+    spacing_axis_1 = grid.spacing[1]
+
+    transverse_length = (
+        (grid.shape[1] - 1)
+        * spacing_axis_1
+    )
+
+    applied_potential_difference = 1.0
+
+    face_relative_permittivity = (
+        face_relative_permittivity_axis_0.values[:, 0]
+    )
+
+    series_denominator = np.sum(
+        spacing_axis_0
+        / face_relative_permittivity
+    )
+
+    analytical_capacitance = (
+        VACUUM_PERMITTIVITY
+        * transverse_length
+        / series_denominator
+    )
+
+    analytical_energy = (
+        0.5
+        * analytical_capacitance
+        * applied_potential_difference**2
+    )
+
+    np.testing.assert_allclose(
+        numerical_energy,
+        analytical_energy,
+        rtol=1.0e-10,
+        atol=1.0e-20,
+    )
+
+def test_dielectric_interface_2d_reports_energy_diagnostics() -> None:
+    simulation = create_dielectric_interface_simulation_2d()
+
+    result = PoissonSolver2D().solve(
+        simulation
+    )
+
+    assert result.converged
+
+    relative_permittivity = (
+        simulation.device.relative_permittivity_field()
+    )
+
+    (
+        electric_field_axis_0,
+        electric_field_axis_1,
+        face_relative_permittivity_axis_0,
+        _,
+        displacement_axis_0,
+        displacement_axis_1,
+    ) = calculate_face_electrostatic_fields_2d(
+        result.potential,
+        relative_permittivity,
+    )
+
+    (
+        energy_density_axis_0,
+        energy_density_axis_1,
+    ) = (
+        calculate_face_electrostatic_energy_density_components_2d(
+            electric_field_axis_0,
+            electric_field_axis_1,
+            displacement_axis_0,
+            displacement_axis_1,
+        )
+    )
+
+    numerical_energy = (
+        calculate_total_electrostatic_energy_2d(
+            energy_density_axis_0,
+            energy_density_axis_1,
+        )
+    )
+
+    grid = simulation.device.grid
+
+    spacing_axis_0 = grid.spacing[0]
+
+    transverse_length = (
+        (grid.shape[1] - 1)
+        * grid.spacing[1]
+    )
+
+    applied_potential_difference = 1.0
+
+    face_relative_permittivity = (
+        face_relative_permittivity_axis_0.values[:, 0]
+    )
+
+    series_denominator = np.sum(
+        spacing_axis_0
+        / face_relative_permittivity
+    )
+
+    analytical_capacitance = (
+        VACUUM_PERMITTIVITY
+        * transverse_length
+        / series_denominator
+    )
+
+    analytical_energy = (
+        0.5
+        * analytical_capacitance
+        * applied_potential_difference**2
+    )
+
+    numerical_capacitance = (
+        2.0
+        * numerical_energy
+        / applied_potential_difference**2
+    )
+
+    absolute_energy_error = abs(
+        numerical_energy
+        - analytical_energy
+    )
+
+    relative_energy_error = (
+        absolute_energy_error
+        / abs(analytical_energy)
+    )
+
+    print(
+        "\n2D dielectric-capacitor energy diagnostics"
+    )
+    print(
+        f"Analytical capacitance per unit depth: "
+        f"{analytical_capacitance:.12e} F/m"
+    )
+    print(
+        f"Numerical capacitance per unit depth: "
+        f"{numerical_capacitance:.12e} F/m"
+    )
+    print(
+        f"Analytical energy per unit depth: "
+        f"{analytical_energy:.12e} J/m"
+    )
+    print(
+        f"Numerical energy per unit depth: "
+        f"{numerical_energy:.12e} J/m"
+    )
+    print(
+        f"Absolute energy error: "
+        f"{absolute_energy_error:.12e} J/m"
+    )
+    print(
+        f"Relative energy error: "
+        f"{relative_energy_error:.12e}"
+    )
+
+    np.testing.assert_allclose(
+        numerical_energy,
+        analytical_energy,
+        rtol=1.0e-10,
+        atol=1.0e-20,
+    )
+
+    np.testing.assert_allclose(
+        numerical_capacitance,
+        analytical_capacitance,
+        rtol=1.0e-10,
+        atol=1.0e-20,
     )
