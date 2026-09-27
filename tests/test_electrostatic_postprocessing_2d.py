@@ -22,7 +22,9 @@ from deviceforge.postprocessing import (
     calculate_face_electrostatic_fields_2d,
 )
 
-
+from deviceforge.postprocessing import (
+    calculate_face_electrostatic_energy_density_components_2d,
+)
 
 def create_linear_potential_field_2d() -> tuple[
     Field,
@@ -1282,4 +1284,318 @@ def test_face_electrostatic_fields_2d_rejects_mismatched_grids() -> None:
         calculate_face_electrostatic_fields_2d(
             potential,
             relative_permittivity,
+        )
+
+def test_face_electrostatic_energy_density_components_2d() -> None:
+    grid = Grid(
+        shape=(4, 5),
+        spacing=(0.25, 0.5),
+    )
+
+    electric_field_axis_0 = FaceField(
+        name="electric_field_axis_0_face",
+        units="V/m",
+        grid=grid,
+        values=np.full(
+            (3, 5),
+            2.0,
+        ),
+        axis=0,
+    )
+
+    electric_field_axis_1 = FaceField(
+        name="electric_field_axis_1_face",
+        units="V/m",
+        grid=grid,
+        values=np.full(
+            (4, 4),
+            3.0,
+        ),
+        axis=1,
+    )
+
+    electric_displacement_axis_0 = FaceField(
+        name="electric_displacement_axis_0_face",
+        units="C/m^2",
+        grid=grid,
+        values=np.full(
+            (3, 5),
+            4.0,
+        ),
+        axis=0,
+    )
+
+    electric_displacement_axis_1 = FaceField(
+        name="electric_displacement_axis_1_face",
+        units="C/m^2",
+        grid=grid,
+        values=np.full(
+            (4, 4),
+            5.0,
+        ),
+        axis=1,
+    )
+
+    (
+        energy_density_axis_0,
+        energy_density_axis_1,
+    ) = (
+        calculate_face_electrostatic_energy_density_components_2d(
+            electric_field_axis_0,
+            electric_field_axis_1,
+            electric_displacement_axis_0,
+            electric_displacement_axis_1,
+        )
+    )
+
+    np.testing.assert_allclose(
+        energy_density_axis_0.values,
+        4.0,
+    )
+
+    np.testing.assert_allclose(
+        energy_density_axis_1.values,
+        7.5,
+    )
+
+    assert energy_density_axis_0.axis == 0
+    assert energy_density_axis_1.axis == 1
+
+    assert (
+        energy_density_axis_0.units
+        == "J/m^3"
+    )
+
+    assert (
+        energy_density_axis_1.units
+        == "J/m^3"
+    )
+
+
+def test_face_electrostatic_energy_density_components_2d_negative_fields(
+) -> None:
+    grid = Grid(
+        shape=(3, 3),
+        spacing=(1.0, 1.0),
+    )
+
+    electric_field_axis_0 = FaceField(
+        name="electric_field_axis_0_face",
+        units="V/m",
+        grid=grid,
+        values=np.full(
+            (2, 3),
+            -2.0,
+        ),
+        axis=0,
+    )
+
+    electric_field_axis_1 = FaceField(
+        name="electric_field_axis_1_face",
+        units="V/m",
+        grid=grid,
+        values=np.full(
+            (3, 2),
+            -4.0,
+        ),
+        axis=1,
+    )
+
+    electric_displacement_axis_0 = FaceField(
+        name="electric_displacement_axis_0_face",
+        units="C/m^2",
+        grid=grid,
+        values=np.full(
+            (2, 3),
+            -6.0,
+        ),
+        axis=0,
+    )
+
+    electric_displacement_axis_1 = FaceField(
+        name="electric_displacement_axis_1_face",
+        units="C/m^2",
+        grid=grid,
+        values=np.full(
+            (3, 2),
+            -8.0,
+        ),
+        axis=1,
+    )
+
+    (
+        energy_density_axis_0,
+        energy_density_axis_1,
+    ) = (
+        calculate_face_electrostatic_energy_density_components_2d(
+            electric_field_axis_0,
+            electric_field_axis_1,
+            electric_displacement_axis_0,
+            electric_displacement_axis_1,
+        )
+    )
+
+    np.testing.assert_allclose(
+        energy_density_axis_0.values,
+        6.0,
+    )
+
+    np.testing.assert_allclose(
+        energy_density_axis_1.values,
+        16.0,
+    )
+
+def test_face_electrostatic_energy_density_components_2d_rejects_wrong_units(
+) -> None:
+    grid = Grid(
+        shape=(3, 3),
+        spacing=(1.0, 1.0),
+    )
+
+    electric_field_axis_0 = FaceField(
+        name="electric_field_axis_0_face",
+        units="V",
+        grid=grid,
+        values=np.ones((2, 3)),
+        axis=0,
+    )
+
+    electric_field_axis_1 = FaceField(
+        name="electric_field_axis_1_face",
+        units="V/m",
+        grid=grid,
+        values=np.ones((3, 2)),
+        axis=1,
+    )
+
+    electric_displacement_axis_0 = FaceField(
+        name="electric_displacement_axis_0_face",
+        units="C/m^2",
+        grid=grid,
+        values=np.ones((2, 3)),
+        axis=0,
+    )
+
+    electric_displacement_axis_1 = FaceField(
+        name="electric_displacement_axis_1_face",
+        units="C/m^2",
+        grid=grid,
+        values=np.ones((3, 2)),
+        axis=1,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="electric_field_axis_0 must have units",
+    ):
+        calculate_face_electrostatic_energy_density_components_2d(
+            electric_field_axis_0,
+            electric_field_axis_1,
+            electric_displacement_axis_0,
+            electric_displacement_axis_1,
+        )
+
+def test_face_electrostatic_energy_density_components_2d_rejects_wrong_axis(
+) -> None:
+    grid = Grid(
+        shape=(3, 3),
+        spacing=(1.0, 1.0),
+    )
+
+    electric_field_axis_0 = FaceField(
+        name="electric_field_axis_0_face",
+        units="V/m",
+        grid=grid,
+        values=np.ones((3, 2)),
+        axis=1,
+    )
+
+    electric_field_axis_1 = FaceField(
+        name="electric_field_axis_1_face",
+        units="V/m",
+        grid=grid,
+        values=np.ones((3, 2)),
+        axis=1,
+    )
+
+    electric_displacement_axis_0 = FaceField(
+        name="electric_displacement_axis_0_face",
+        units="C/m^2",
+        grid=grid,
+        values=np.ones((2, 3)),
+        axis=0,
+    )
+
+    electric_displacement_axis_1 = FaceField(
+        name="electric_displacement_axis_1_face",
+        units="C/m^2",
+        grid=grid,
+        values=np.ones((3, 2)),
+        axis=1,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="electric_field_axis_0 must be defined",
+    ):
+        calculate_face_electrostatic_energy_density_components_2d(
+            electric_field_axis_0,
+            electric_field_axis_1,
+            electric_displacement_axis_0,
+            electric_displacement_axis_1,
+        )
+
+def test_face_electrostatic_energy_density_components_2d_rejects_mismatched_grids(
+) -> None:
+    grid = Grid(
+        shape=(3, 3),
+        spacing=(1.0, 1.0),
+    )
+
+    other_grid = Grid(
+        shape=(3, 3),
+        spacing=(2.0, 1.0),
+    )
+
+    electric_field_axis_0 = FaceField(
+        name="electric_field_axis_0_face",
+        units="V/m",
+        grid=grid,
+        values=np.ones((2, 3)),
+        axis=0,
+    )
+
+    electric_field_axis_1 = FaceField(
+        name="electric_field_axis_1_face",
+        units="V/m",
+        grid=grid,
+        values=np.ones((3, 2)),
+        axis=1,
+    )
+
+    electric_displacement_axis_0 = FaceField(
+        name="electric_displacement_axis_0_face",
+        units="C/m^2",
+        grid=other_grid,
+        values=np.ones((2, 3)),
+        axis=0,
+    )
+
+    electric_displacement_axis_1 = FaceField(
+        name="electric_displacement_axis_1_face",
+        units="C/m^2",
+        grid=grid,
+        values=np.ones((3, 2)),
+        axis=1,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="must use the same grid",
+    ):
+        calculate_face_electrostatic_energy_density_components_2d(
+            electric_field_axis_0,
+            electric_field_axis_1,
+            electric_displacement_axis_0,
+            electric_displacement_axis_1,
         )

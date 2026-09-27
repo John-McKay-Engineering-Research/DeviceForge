@@ -635,3 +635,158 @@ def calculate_electrostatic_fields_2d(
         electric_field_axis_1,
         electric_field_magnitude,
     )
+
+def calculate_face_electrostatic_energy_density_components_2d(
+    electric_field_axis_0: FaceField,
+    electric_field_axis_1: FaceField,
+    electric_displacement_axis_0: FaceField,
+    electric_displacement_axis_1: FaceField,
+) -> tuple[
+    FaceField,
+    FaceField,
+]:
+    """
+    Calculate face-centred electrostatic energy-density components
+    on a two-dimensional grid.
+
+    For linear electrostatics,
+
+        u = 0.5 * E dot D.
+
+    The two Cartesian contributions are retained on their natural
+    face locations:
+
+        u_0 = 0.5 * E_0 * D_0
+        u_1 = 0.5 * E_1 * D_1
+
+    The axis-0 and axis-1 quantities therefore remain separate
+    FaceField objects because they have different face-centred
+    shapes.
+    """
+
+    face_fields = (
+        electric_field_axis_0,
+        electric_field_axis_1,
+        electric_displacement_axis_0,
+        electric_displacement_axis_1,
+    )
+
+    if not all(
+        isinstance(
+            face_field,
+            FaceField,
+        )
+        for face_field in face_fields
+    ):
+        raise TypeError(
+            "Electric-field and electric-displacement "
+            "components must all be FaceField objects."
+        )
+
+    if electric_field_axis_0.axis != 0:
+        raise ValueError(
+            "electric_field_axis_0 must be defined "
+            "on axis-0 faces."
+        )
+
+    if electric_field_axis_1.axis != 1:
+        raise ValueError(
+            "electric_field_axis_1 must be defined "
+            "on axis-1 faces."
+        )
+
+    if electric_displacement_axis_0.axis != 0:
+        raise ValueError(
+            "electric_displacement_axis_0 must be "
+            "defined on axis-0 faces."
+        )
+
+    if electric_displacement_axis_1.axis != 1:
+        raise ValueError(
+            "electric_displacement_axis_1 must be "
+            "defined on axis-1 faces."
+        )
+
+    if electric_field_axis_0.units != "V/m":
+        raise ValueError(
+            "electric_field_axis_0 must have units 'V/m'."
+        )
+
+    if electric_field_axis_1.units != "V/m":
+        raise ValueError(
+            "electric_field_axis_1 must have units 'V/m'."
+        )
+
+    if electric_displacement_axis_0.units != "C/m^2":
+        raise ValueError(
+            "electric_displacement_axis_0 must have "
+            "units 'C/m^2'."
+        )
+
+    if electric_displacement_axis_1.units != "C/m^2":
+        raise ValueError(
+            "electric_displacement_axis_1 must have "
+            "units 'C/m^2'."
+        )
+
+    reference_grid = electric_field_axis_0.grid
+
+    if any(
+        face_field.grid != reference_grid
+        for face_field in face_fields[1:]
+    ):
+        raise ValueError(
+            "Electric-field and electric-displacement "
+            "components must use the same grid."
+        )
+
+    if (
+        electric_field_axis_0.values.shape
+        != electric_displacement_axis_0.values.shape
+    ):
+        raise ValueError(
+            "Axis-0 electric-field and "
+            "electric-displacement face shapes must match."
+        )
+
+    if (
+        electric_field_axis_1.values.shape
+        != electric_displacement_axis_1.values.shape
+    ):
+        raise ValueError(
+            "Axis-1 electric-field and "
+            "electric-displacement face shapes must match."
+        )
+
+    energy_density_axis_0_values = (
+        0.5
+        * electric_field_axis_0.values
+        * electric_displacement_axis_0.values
+    )
+
+    energy_density_axis_1_values = (
+        0.5
+        * electric_field_axis_1.values
+        * electric_displacement_axis_1.values
+    )
+
+    energy_density_axis_0 = FaceField(
+        name="electrostatic_energy_density_axis_0_face",
+        units="J/m^3",
+        grid=reference_grid,
+        values=energy_density_axis_0_values,
+        axis=0,
+    )
+
+    energy_density_axis_1 = FaceField(
+        name="electrostatic_energy_density_axis_1_face",
+        units="J/m^3",
+        grid=reference_grid,
+        values=energy_density_axis_1_values,
+        axis=1,
+    )
+
+    return (
+        energy_density_axis_0,
+        energy_density_axis_1,
+    )
