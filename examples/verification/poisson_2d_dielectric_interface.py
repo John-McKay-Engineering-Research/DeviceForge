@@ -17,11 +17,15 @@ from deviceforge.core.boundary import (
 )
 from deviceforge.core.simulation import Simulation
 from deviceforge.physics.materials import Material
+
 from deviceforge.postprocessing import (
     calculate_face_electrostatic_fields_2d,
+    calculate_total_electrostatic_energy_2d,
+    calculate_face_electrostatic_energy_density_components_2d,
 )
 from deviceforge.solvers import PoissonSolver2D
 
+VACUUM_PERMITTIVITY = 8.8541878128e-12
 
 NUMBER_OF_POINTS_AXIS_0 = 41
 NUMBER_OF_POINTS_AXIS_1 = 21
@@ -254,6 +258,11 @@ def run_verification(
     float,
     float,
     float,
+    float,
+    float,
+    float,
+    float,
+    float,
 ]:
     """
     Solve the dielectric-interface problem and calculate diagnostics.
@@ -279,14 +288,33 @@ def run_verification(
 
     (
         electric_field_axis_0,
-        _,
+        electric_field_axis_1,
         face_relative_permittivity_axis_0,
         _,
         displacement_axis_0,
-        _,
+        displacement_axis_1,
     ) = calculate_face_electrostatic_fields_2d(
         result.potential,
         relative_permittivity,
+    )
+
+    (
+        energy_density_axis_0,
+        energy_density_axis_1,
+    ) = (
+        calculate_face_electrostatic_energy_density_components_2d(
+            electric_field_axis_0,
+            electric_field_axis_1,
+            displacement_axis_0,
+            displacement_axis_1,
+        )
+    )
+
+    numerical_energy = (
+        calculate_total_electrostatic_energy_2d(
+            energy_density_axis_0,
+            energy_density_axis_1,
+        )
     )
 
     centre_axis_1 = (
@@ -377,6 +405,90 @@ def run_verification(
         / high_material_field
     )
 
+    grid = simulation.device.grid
+
+    spacing_axis_0 = grid.spacing[0]
+
+    transverse_length = (
+        (grid.shape[1] - 1)
+        * grid.spacing[1]
+    )
+# edited here #
+    total_number_of_faces = (
+            grid.shape[0] - 1
+    )
+
+    number_of_low_faces = (
+            split_index - 1
+    )
+
+    number_of_interface_faces = 1
+
+    number_of_high_faces = (
+            total_number_of_faces
+            - number_of_low_faces
+            - number_of_interface_faces
+    )
+
+    assert (
+            number_of_low_faces
+            + number_of_interface_faces
+            + number_of_high_faces
+            == total_number_of_faces
+    )
+
+    interface_relative_permittivity = (
+        2.0
+        * LOW_RELATIVE_PERMITTIVITY
+        * HIGH_RELATIVE_PERMITTIVITY
+        / (
+            LOW_RELATIVE_PERMITTIVITY
+            + HIGH_RELATIVE_PERMITTIVITY
+        )
+    )
+
+    series_denominator = (
+        number_of_low_faces
+        * spacing_axis_0
+        / LOW_RELATIVE_PERMITTIVITY
+        + spacing_axis_0
+        / interface_relative_permittivity
+        + number_of_high_faces
+        * spacing_axis_0
+        / HIGH_RELATIVE_PERMITTIVITY
+    )
+
+    analytical_capacitance = (
+        VACUUM_PERMITTIVITY
+        * transverse_length
+        / series_denominator
+    )
+
+    applied_potential_difference = (
+        RIGHT_POTENTIAL
+        - LEFT_POTENTIAL
+    )
+
+    analytical_energy = (
+        0.5
+        * analytical_capacitance
+        * applied_potential_difference**2
+    )
+
+    numerical_capacitance = (
+        2.0
+        * numerical_energy
+        / applied_potential_difference**2
+    )
+
+    relative_energy_error = (
+        abs(
+            numerical_energy
+            - analytical_energy
+        )
+        / abs(analytical_energy)
+    )
+
     return (
         simulation,
         split_index,
@@ -390,6 +502,11 @@ def run_verification(
         low_material_field,
         high_material_field,
         field_ratio,
+        analytical_capacitance,
+        numerical_capacitance,
+        analytical_energy,
+        numerical_energy,
+        relative_energy_error,
     )
 
 
@@ -401,6 +518,11 @@ def print_results(
     low_material_field: float,
     high_material_field: float,
     field_ratio: float,
+    analytical_capacitance: float,
+    numerical_capacitance: float,
+    analytical_energy: float,
+    numerical_energy: float,
+    relative_energy_error: float,
 ) -> None:
     """
     Print the dielectric-interface verification diagnostics.
@@ -409,6 +531,32 @@ def print_results(
     expected_field_ratio = (
         HIGH_RELATIVE_PERMITTIVITY
         / LOW_RELATIVE_PERMITTIVITY
+    )
+
+    displacement_passed = (
+        relative_displacement_deviation
+        < 1.0e-10
+    )
+
+    field_ratio_passed = np.isclose(
+        field_ratio,
+        expected_field_ratio,
+        rtol=1.0e-10,
+        atol=1.0e-12,
+    )
+
+    energy_passed = np.isclose(
+        numerical_energy,
+        analytical_energy,
+        rtol=1.0e-10,
+        atol=1.0e-20,
+    )
+
+    capacitance_passed = np.isclose(
+        numerical_capacitance,
+        analytical_capacitance,
+        rtol=1.0e-10,
+        atol=1.0e-20,
     )
 
     print()
@@ -442,6 +590,9 @@ def print_results(
     )
 
     print()
+    print(
+        "Displacement conservation"
+    )
 
     print(
         "Mean D0:                       "
@@ -459,6 +610,9 @@ def print_results(
     )
 
     print()
+    print(
+        "Electric-field scaling"
+    )
 
     print(
         "Mean |E0|, epsilon_r = 4:      "
@@ -481,25 +635,84 @@ def print_results(
     )
 
     print()
+    print(
+        "Capacitance per unit depth"
+    )
 
-    if (
-        relative_displacement_deviation
-        < 1.0e-10
-        and np.isclose(
-            field_ratio,
-            expected_field_ratio,
-            rtol=1.0e-10,
-            atol=1.0e-12,
-        )
-    ):
+    print(
+        "Analytical:                    "
+        f"{analytical_capacitance:.12e} F/m"
+    )
+
+    print(
+        "Numerical:                     "
+        f"{numerical_capacitance:.12e} F/m"
+    )
+
+    print()
+    print(
+        "Stored energy per unit depth"
+    )
+
+    print(
+        "Analytical:                    "
+        f"{analytical_energy:.12e} J/m"
+    )
+
+    print(
+        "Numerical:                     "
+        f"{numerical_energy:.12e} J/m"
+    )
+
+    print(
+        "Relative energy error:          "
+        f"{relative_energy_error:.12e}"
+    )
+
+    print()
+    print(
+        "Verification checks"
+    )
+
+    if displacement_passed:
         print(
             "PASS: normal electric displacement "
-            "is conserved across the interface."
+            "is conserved."
         )
     else:
         print(
-            "FAIL: dielectric-interface verification "
-            "did not satisfy the configured tolerances."
+            "FAIL: normal electric displacement "
+            "is not conserved."
+        )
+
+    if field_ratio_passed:
+        print(
+            "PASS: electric field scales inversely "
+            "with permittivity."
+        )
+    else:
+        print(
+            "FAIL: electric-field scaling is incorrect."
+        )
+
+    if capacitance_passed:
+        print(
+            "PASS: numerical capacitance matches "
+            "the analytical series-capacitor result."
+        )
+    else:
+        print(
+            "FAIL: capacitance verification failed."
+        )
+
+    if energy_passed:
+        print(
+            "PASS: numerical stored energy matches "
+            "the analytical result."
+        )
+    else:
+        print(
+            "FAIL: stored-energy verification failed."
         )
 
 
@@ -895,6 +1108,11 @@ def main() -> None:
         low_material_field,
         high_material_field,
         field_ratio,
+        analytical_capacitance,
+        numerical_capacitance,
+        analytical_energy,
+        numerical_energy,
+        relative_energy_error,
     ) = run_verification()
 
     print_results(
@@ -905,6 +1123,11 @@ def main() -> None:
         low_material_field,
         high_material_field,
         field_ratio,
+        analytical_capacitance,
+        numerical_capacitance,
+        analytical_energy,
+        numerical_energy,
+        relative_energy_error,
     )
 
     write_profile_csv(
